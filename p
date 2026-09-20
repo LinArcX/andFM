@@ -179,7 +179,7 @@ menu () {
       # - [error id] may be * to suppress all warnings (for a specified file or files).
       # - [filename] may contain the wildcard characters * or ?.
       cppcheck --addon=cppcheck/misra.json --addon=cppcheck/findcasts.json --addon=cppcheck/misc.json --addon=cppcheck/y2038.json --addon=cppcheck/threadsafety.json --inline-suppr --std=c11 --enable=all --error-exitcode=1 --platform=unix64 --report-type=misra-c-2012 -q --xml --xml-version=2 lib/util/*.c lib/*.c example/*.c -I lib/util/ > report/cppcheck.xml 2>&1
-      cppcheck-htmlreport --file=report/cppcheck.xml --title="mewFM" --report-dir=report --source-dir=.
+      cppcheck-htmlreport --file=report/cppcheck.xml --title="andFM" --report-dir=report --source-dir=.
       ;;
     "cppcheck(show)")
       ~/software/brave/brave-browser-1.86.142-linux-amd64/brave ./report/index.html
@@ -199,7 +199,7 @@ menu () {
       ;;
     "lcov")
       # https://wiki.cs.jmu.edu/student/gcov/start
-      ./build/debug/mewFM
+      ./build/debug/andFM
       lcov --capture --directory build/debug --output-file build/debug/coverage.info
       ;;
     "gcovr")
@@ -214,7 +214,7 @@ menu () {
       ;;
     "kcov(generate)")
       rm -r coverage/*
-      kcov coverage/ build/debug/mewFM
+      kcov coverage/ build/debug/andFM
       ;;
     "kcov(show)")
       ~/software/brave/brave-browser-1.86.142-linux-amd64/brave ./coverage/index.html
@@ -223,37 +223,37 @@ menu () {
     "llvm-cov")
       ;;
     "valgrind(memcheck)")
-      valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes --xtree-leak=yes -s -v build/debug/mewFM
+      valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes --xtree-leak=yes -s -v build/debug/andFM
       ;;
     "callgrind")
-      valgrind --tool=callgrind --dump-instr=yes --collect-jumps=yes -s -v build/debug/mewFM
+      valgrind --tool=callgrind --dump-instr=yes --collect-jumps=yes -s -v build/debug/andFM
       ;;
     "kcachegrind")
       ls callgrind.out.* cachegrind.out.* | fzf --header="kcachgrind: " | xargs kcachegrind
       ;;
     "cachegrind")
-      valgrind --tool=cachegrind --cache-sim=yes --branch-sim=yes -s -v build/debug/mewFM
+      valgrind --tool=cachegrind --cache-sim=yes --branch-sim=yes -s -v build/debug/andFM
       ;;
     "helgrind")
-      valgrind --tool=helgrind -s -v build/debug/mewFM
+      valgrind --tool=helgrind -s -v build/debug/andFM
       ;;
     "massif")
-      valgrind --tool=massif -s -v build/debug/mewFM
+      valgrind --tool=massif -s -v build/debug/andFM
       ;;
     "ms_print")
       ls massif.out.* | fzf --header="ms_print: " | xargs ms_print
       ;;
     "drd")
-      valgrind --tool=drd --trace-fork-join=yes --trace-mutex=yes --trace-semaphore=yes -s -v build/debug/mewFM
+      valgrind --tool=drd --trace-fork-join=yes --trace-mutex=yes --trace-semaphore=yes -s -v build/debug/andFM
       ;;
     "dhat")
-      valgrind --tool=dhat -s -v build/debug/mewFM
+      valgrind --tool=dhat -s -v build/debug/andFM
       ;;
     "dhat(cat)")
       ls dhat.out.* | fzf --header="dhat: " | xargs cat | less
       ;;
     "bbv")
-      valgrind --tool=exp-bbv -s -v build/debug/mewFM
+      valgrind --tool=exp-bbv -s -v build/debug/andFM
       ;;
     "bbv(cat)")
       ls bb.out.* | fzf --header="bbv: " | xargs cat | less
@@ -262,7 +262,7 @@ menu () {
       ls build/debug | fzf --header="perf: " | xargs perf stat -d
       ;;
     "uftrace record(test)")
-      uftrace --srcline -a --symbols --time --no-libcall --symbols -F __clove_symint___UtilSuite* record build/debug/mewFM
+      uftrace --srcline -a --symbols --time --no-libcall --symbols -F __clove_symint___UtilSuite* record build/debug/andFM
       ;;
     "uftrace replay(tests)")
       uftrace replay

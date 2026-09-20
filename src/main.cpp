@@ -6,6 +6,11 @@
 #include <GLES2/gl2.h>
 
 #include <chrono>
+#include <cstring>
+#include <string>
+#include <vector>
+
+#include <dirent.h>
 
 #include "android_native_app_glue.h"
 
@@ -16,6 +21,12 @@
 
 #include "../third_party/oui-blendish/oui.h"
 #include "../third_party/oui-blendish/blendish.h"
+
+struct FileEntry
+{
+  std::string name;
+  bool isDirectory = false;
+};
 
 struct App
 {
@@ -34,7 +45,8 @@ struct App
   bool running = true;
   bool clicked = false;
 
-  int buttonItem = -1;
+  std::string currentPath;
+  std::vector<FileEntry> entries;
 };
 
 static App g_app;
@@ -217,13 +229,12 @@ static void buttonHandler(
     g_app.clicked = !g_app.clicked;
 }
 
-struct ButtonData
+struct EntryItemData
 {
-  const char *label;
+  int entryIndex;
 };
 
-static int createButton(
-  const char *label)
+static int createEntryItem(int entryIndex)
 {
   const int item = uiItem(g_app.ui);
 
@@ -238,16 +249,57 @@ static int createButton(
     item,
     UI_BUTTON0_HOT_UP);
 
-  ButtonData *data =
-    static_cast<ButtonData *>(
+  EntryItemData *pData =
+    static_cast<EntryItemData *>(
       uiAllocHandle(
         g_app.ui,
         item,
-        sizeof(ButtonData)));
+        sizeof(EntryItemData)));
 
-  data->label = label;
+  pData->entryIndex = entryIndex;
 
   return item;
+}
+
+static bool readDirectory(const std::string &path)
+{
+  DIR *pDir = opendir(path.c_str());
+
+  if (!pDir)
+  {
+    __android_log_print(
+      ANDROID_LOG_ERROR,
+      "andFM",
+      "Failed to open directory: %s",
+      path.c_str());
+
+    return false;
+  }
+
+  g_app.entries.clear();
+
+  struct dirent *pEntry = nullptr;
+
+  while ((pEntry = readdir(pDir)) != nullptr)
+  {
+    const char *pName = pEntry->d_name;
+
+    if (strcmp(pName, ".") == 0 ||
+        strcmp(pName, "..") == 0)
+    {
+      continue;
+    }
+
+    FileEntry entry;
+    entry.name = pName;
+    entry.isDirectory = (pEntry->d_type == DT_DIR);
+
+    g_app.entries.push_back(entry);
+  }
+
+  closedir(pDir);
+
+  return true;
 }
 
 static void buildUi()
@@ -306,18 +358,21 @@ static void buildUi()
       title);
   }
 
-  g_app.buttonItem =
-    createButton("Click me");
+  for (size_t i = 0; i < g_app.entries.size(); i++)
+  {
+    const int item =
+      createEntryItem(static_cast<int>(i));
 
-  uiSetLayout(
-    g_app.ui,
-    g_app.buttonItem,
-    UI_HFILL);
+    uiSetLayout(
+      g_app.ui,
+      item,
+      UI_HFILL);
 
-  uiInsert(
-    g_app.ui,
-    column,
-    g_app.buttonItem);
+    uiInsert(
+      g_app.ui,
+      column,
+      item);
+  }
 
   uiEndLayout(g_app.ui);
 }
@@ -335,15 +390,18 @@ static void drawItem(
       g_app.ui,
       item);
 
-  void *handle =
+  void *pHandle =
     uiGetHandle(
       g_app.ui,
       item);
 
-  if (item == g_app.buttonItem)
+  if (pHandle)
   {
-    ButtonData *data =
-      static_cast<ButtonData *>(handle);
+    EntryItemData *pData =
+      static_cast<EntryItemData *>(pHandle);
+
+    const FileEntry &entry =
+      g_app.entries[pData->entryIndex];
 
     bndToolButton(
       g_app.vg,
@@ -354,29 +412,7 @@ static void drawItem(
       BND_CORNER_ALL,
       static_cast<BNDwidgetState>(state),
       -1,
-      data ? data->label : "Click");
-
-    if (g_app.clicked)
-    {
-      nvgFontSize(
-        g_app.vg,
-        16.0f);
-
-      nvgFontFace(
-        g_app.vg,
-        "default");
-
-      nvgFillColor(
-        g_app.vg,
-        nvgRGB(220, 220, 220));
-
-      nvgText(
-        g_app.vg,
-        rect.x,
-        rect.y + rect.h + 28,
-        "Clicked!",
-        nullptr);
-    }
+      entry.name.c_str());
   }
 
   int child =
@@ -435,7 +471,7 @@ static void draw()
     g_app.vg,
     24,
     24,
-    "Minimal Android / C++17",
+    g_app.currentPath.c_str(),
     nullptr);
 
   drawItem(0);
@@ -534,6 +570,15 @@ static void handleCommand(
         }
 
         g_app.window = app->window;
+
+        g_app.currentPath = "/storage/emulated/0/";
+
+        if (!readDirectory(g_app.currentPath))
+        {
+          g_app.currentPath = "/";
+
+          readDirectory(g_app.currentPath);
+        }
 
         buildUi();
       }

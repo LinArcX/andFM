@@ -1,0 +1,15 @@
+build/*
+.cache/*
+gmon.out
+garbage/*
+patches/*
+package.json
+node_modules/
+breakpoints.json
+package-lock.json
+compile_commands.json
+.opencode/opencode.json
+scripts/extractFiles.py
+third_party/breakpoints.json
+third_party/nanovg/breakpoints.json
+third_party/oui-blendish/breakpoints.json

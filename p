@@ -40,18 +40,18 @@ menu () {
     # main
     "Create patch"
 
+    # real device
+    "Build(arm64_v8a)"
+    "Install on real device(arm64_v8a) with wifi"
+    "Clean(arm64_v8a)"
+ 
     # emulator
     "Build(x86_64)"
     "Launch qemu emulator (android x86-64)" "Connect to emulator"
     "Install .apk to emulator" "Uninstall .apk from emulator"
-    "adb run" "adb log" "adb close apk" "adb reboot android OS" "adb poweroff android OS"
-    "clean(x86_64)"
+    "Adb run" "Adb log" "Adb close apk" "Adb reboot android OS" "Adb poweroff android OS"
+    "Clean(x86_64)"
 
-    # real device
-    "build(arm64_v8a)"
-    "install on real device(arm64_v8a) with wifi"
-    "clean(arm64_v8a)"
- 
     # documentation
     "doxygen(generate)" 
     "doxygen(show)" 
@@ -111,10 +111,97 @@ menu () {
       file="patches/${filename}.json"
       nvim "$file"
       if [ $? -eq 0 ] && [ -s "$file" ]; then
+        # $file = json diff file
         ./scripts/applyPatch.sh $file
       fi
       ;;
 
+    "Build(arm64_v8a)")
+      ./scripts/build.sh --debug --arm64_v8a
+      if [ $? -eq 1 ]; then
+        # error
+        mpg123 -f 3000 /home/linarcx/VoidConf/assets/error2.mp3 > /dev/null 2>&1 
+      else
+        # success
+        mpg123 -f 3000 /home/linarcx/VoidConf/assets/success.mp3 > /dev/null 2>&1 
+      fi
+      ;;
+    "Install on real device(arm64_v8a) with wifi")
+      echo "Showing Devices"
+      output=$(adb devices)
+ 
+      if [[ "$output" == *"adb-"* ]]; then
+        echo "Found an ADB device"
+      else
+        echo "No ADB device found"
+        echo "Enter the port"
+        read portNumber
+
+        echo "Enter the pair code"
+        read pairCode
+
+        echo "Pairing"
+        adb pair 192.168.1.58:$portNumber $pairCode
+        output=$(adb devices)
+      fi
+
+      device=$(echo "$output" | awk 'NR==2 {print $1}')
+      echo "Device: $device"
+
+      echo "Connecting to device"
+      adb connect $device
+
+      echo "Setting time-out for 1 day"
+      adb -s $device shell settings put system screen_off_timeout 86400000
+
+      # need to extract to separate function
+      PROJECT_DIR="/mnt/D/workspace/c++/active/andFM"
+      DEBUG_DIR="$PROJECT_DIR/build/arm64_v8a/debug"
+      RELEASE_DIR="$PROJECT_DIR/build/arm64_v8a/release"
+ 
+      APK_LIST=$(
+        find "$DEBUG_DIR" "$RELEASE_DIR" \
+          -type f \
+          -name '*.apk' \
+          2>/dev/null
+      )
+      
+      if [ -z "$APK_LIST" ]; then
+        echo "No APK files found in:"
+        echo "  $DEBUG_DIR"
+        echo "  $RELEASE_DIR"
+        exit 1
+      fi
+      
+      APK=$(printf '%s\n' "$APK_LIST" | fzf \
+        --height=40% \
+        --layout=reverse \
+        --border \
+        --prompt="Select APK: " \
+        --header="Choose an APK to install")
+      
+      if [ -z "$APK" ]; then
+        echo "Installation cancelled."
+        exit 0
+      fi
+      # need to extract to separate function
+ 
+      echo "--> Installing:"
+      echo "  $APK"
+      adb -s $device uninstall org.linarcx.andFM
+      adb -s $device install -r "$APK"
+      ;;
+    "Clean(arm64_v8a)")
+      echo ">>> cleaning build/debug directory"
+      ./scripts/build.sh --clean --debug --arm64_v8a
+      if [ $? -eq 1 ]; then
+        # error
+        mpg123 -f 3000 /home/linarcx/VoidConf/assets/error2.mp3 > /dev/null 2>&1 
+      else
+        # success
+        mpg123 -f 3000 /home/linarcx/VoidConf/assets/success.mp3 > /dev/null 2>&1 
+      fi
+      ;;
 
     "Build(x86_64)")
       ./scripts/build.sh --debug --x86_64
@@ -208,23 +295,23 @@ menu () {
     "Uninstall .apk from emulator")
       adb -s 127.0.0.1:5555 uninstall org.linarcx.andFM
       ;;
-    "adb run")
+    "Adb run")
       adb -s 127.0.0.1:5555 shell am start -n org.linarcx.andFM/android.app.NativeActivity
       ;;
-    "adb log")
+    "Adb log")
       adb -s 127.0.0.1:5555 logcat | grep andFM
       ;;
-    "adb close apk")
+    "Adb close apk")
       adb -s 127.0.0.1:5555 shell am force-stop org.linarcx.andFM
       ;;
-    "adb reboot android OS")
+    "Adb reboot android OS")
       adb -s 127.0.0.1:5555 shell reboot -p
       ;;
-    "adb poweroff android OS")
+    "Adb poweroff android OS")
       adb -s 127.0.0.1:5555 shell reboot --poweroff
       ;;
 
-    "clean(x86_64)")
+    "Clean(x86_64)")
       echo ">>> cleaning build/debug directory"
       ./scripts/build.sh --clean --debug  --x86_64
       if [ $? -eq 1 ]; then
@@ -237,92 +324,7 @@ menu () {
       ;;
 
 
-    "build(arm64_v8a)")
-      ./scripts/build.sh --debug --arm64_v8a
-      if [ $? -eq 1 ]; then
-        # error
-        mpg123 -f 3000 /home/linarcx/VoidConf/assets/error2.mp3 > /dev/null 2>&1 
-      else
-        # success
-        mpg123 -f 3000 /home/linarcx/VoidConf/assets/success.mp3 > /dev/null 2>&1 
-      fi
-      ;;
-    "install on real device(arm64_v8a) with wifi")
-      echo "Showing Devices"
-      output=$(adb devices)
- 
-      if [[ "$output" == *"adb-"* ]]; then
-        echo "Found an ADB device"
-      else
-        echo "No ADB device found"
-        echo "Enter the port"
-        read portNumber
 
-        echo "Enter the pair code"
-        read pairCode
-
-        echo "Pairing"
-        adb pair 192.168.1.58:$portNumber $pairCode
-        output=$(adb devices)
-      fi
-
-      device=$(echo "$output" | awk 'NR==2 {print $1}')
-      echo "Device: $device"
-
-      echo "Connecting to device"
-      adb connect $device
-
-      echo "Setting time-out for 1 day"
-      adb -s $device shell settings put system screen_off_timeout 86400000
-
-      # need to extract to separate function
-      PROJECT_DIR="/mnt/D/workspace/c++/active/andFM"
-      DEBUG_DIR="$PROJECT_DIR/build/arm64_v8a/debug"
-      RELEASE_DIR="$PROJECT_DIR/build/arm64_v8a/release"
- 
-      APK_LIST=$(
-        find "$DEBUG_DIR" "$RELEASE_DIR" \
-          -type f \
-          -name '*.apk' \
-          2>/dev/null
-      )
-      
-      if [ -z "$APK_LIST" ]; then
-        echo "No APK files found in:"
-        echo "  $DEBUG_DIR"
-        echo "  $RELEASE_DIR"
-        exit 1
-      fi
-      
-      APK=$(printf '%s\n' "$APK_LIST" | fzf \
-        --height=40% \
-        --layout=reverse \
-        --border \
-        --prompt="Select APK: " \
-        --header="Choose an APK to install")
-      
-      if [ -z "$APK" ]; then
-        echo "Installation cancelled."
-        exit 0
-      fi
-      # need to extract to separate function
- 
-      echo "--> Installing:"
-      echo "  $APK"
-      adb -s $device uninstall org.linarcx.andFM
-      adb -s $device install -r "$APK"
-      ;;
-    "clean(arm64_v8a)")
-      echo ">>> cleaning build/debug directory"
-      ./scripts/build.sh --clean --debug --arm64_v8a
-      if [ $? -eq 1 ]; then
-        # error
-        mpg123 -f 3000 /home/linarcx/VoidConf/assets/error2.mp3 > /dev/null 2>&1 
-      else
-        # success
-        mpg123 -f 3000 /home/linarcx/VoidConf/assets/success.mp3 > /dev/null 2>&1 
-      fi
-      ;;
 
 
 

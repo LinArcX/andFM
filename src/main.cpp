@@ -55,6 +55,10 @@ struct App
   bool searchActive = false;
   std::string searchQuery;
 
+  int pressedKeyboardRow = -1;
+  int pressedKeyboardCol = -1;
+  int pressedKeyboardAction = -1;
+
   struct BreadcrumbItem
   {
     std::string name;
@@ -885,12 +889,22 @@ static bool isOnSearchButton(
          y <= btnY + kSearchButtonSize;
 }
 
-static void handleKeyboardTap(
+static bool hitTestKeyboard(
   float x,
-  float y)
+  float y,
+  int &rowOut,
+  int &colOut,
+  int &actionOut)
 {
+  rowOut = -1;
+  colOut = -1;
+  actionOut = -1;
+
   const float screenWidth = static_cast<float>(g_app.width);
   const float keyboardTop = getKeyboardTop();
+
+  if (y < keyboardTop)
+    return false;
 
   const float totalGaps = 9.0f * kKeyboardKeyGap;
   const float keyWidth =
@@ -918,14 +932,13 @@ static void handleKeyboardTap(
 
         if (x >= keyX && x <= keyX + keyWidth)
         {
-          g_app.searchQuery += pRow[c];
-          rebuildFilter();
-          buildUi();
-          return;
+          rowOut = r;
+          colOut = c;
+          return true;
         }
       }
 
-      return;
+      return false;
     }
 
     rowY += kKeyboardKeyHeight + kKeyboardKeyGap;
@@ -938,39 +951,67 @@ static void handleKeyboardTap(
 
   if (y >= rowY && y <= rowY + kKeyboardKeyHeight)
   {
-    if (x >= actionX && x <= actionX + actionWidth)
+    for (int a = 0; a < 3; a++)
     {
-      g_app.searchActive = false;
-      g_app.searchQuery.clear();
-      rebuildFilter();
-      buildUi();
-      return;
-    }
-
-    actionX += actionWidth + kKeyboardKeyGap;
-
-    if (x >= actionX && x <= actionX + actionWidth)
-    {
-      g_app.searchQuery += ' ';
-      rebuildFilter();
-      buildUi();
-      return;
-    }
-
-    actionX += actionWidth + kKeyboardKeyGap;
-
-    if (x >= actionX && x <= actionX + actionWidth)
-    {
-      if (!g_app.searchQuery.empty())
+      if (x >= actionX && x <= actionX + actionWidth)
       {
-        g_app.searchQuery.pop_back();
-        rebuildFilter();
-        buildUi();
+        actionOut = a;
+        return true;
       }
 
-      return;
+      actionX += actionWidth + kKeyboardKeyGap;
     }
   }
+
+  return false;
+}
+
+static void applyKeyboardKey(
+  int row,
+  int col,
+  int action)
+{
+  if (action == 0)
+  {
+    g_app.searchActive = false;
+    g_app.searchQuery.clear();
+    rebuildFilter();
+    buildUi();
+    return;
+  }
+
+  if (action == 1)
+  {
+    g_app.searchQuery += ' ';
+    rebuildFilter();
+    buildUi();
+    return;
+  }
+
+  if (action == 2)
+  {
+    if (!g_app.searchQuery.empty())
+    {
+      g_app.searchQuery.pop_back();
+      rebuildFilter();
+      buildUi();
+    }
+
+    return;
+  }
+
+  if (row < 0 || col < 0)
+    return;
+
+  const char *pRow = g_keyboardRows[row];
+  const int n = static_cast<int>(strlen(pRow));
+
+  if (col >= n)
+    return;
+
+  g_app.searchQuery += pRow[col];
+  rebuildFilter();
+  buildUi();
 }
 
 static void drawItem(
@@ -1535,6 +1576,10 @@ static void draw()
 
       for (int c = 0; c < n; c++)
       {
+        const bool pressed =
+          (r == g_app.pressedKeyboardRow &&
+           c == g_app.pressedKeyboardCol);
+
         nvgBeginPath(g_app.vg);
         nvgRoundedRect(
           g_app.vg,
@@ -1543,7 +1588,9 @@ static void draw()
           keyWidth,
           kKeyboardKeyHeight,
           8.0f);
-        nvgFillColor(g_app.vg, rgb(55, 55, 55));
+        nvgFillColor(
+          g_app.vg,
+          pressed ? rgb(90, 120, 170) : rgb(55, 55, 55));
         nvgFill(g_app.vg);
 
         char label[2] = { pRow[c], '\0' };
@@ -1579,7 +1626,11 @@ static void draw()
         actionWidth,
         kKeyboardKeyHeight,
         8.0f);
-      nvgFillColor(g_app.vg, rgb(90, 55, 55));
+      nvgFillColor(
+        g_app.vg,
+        g_app.pressedKeyboardAction == 0
+          ? rgb(140, 70, 70)
+          : rgb(90, 55, 55));
       nvgFill(g_app.vg);
 
       nvgFontSize(g_app.vg, 40.0f);
@@ -1603,15 +1654,28 @@ static void draw()
         actionWidth,
         kKeyboardKeyHeight,
         8.0f);
-      nvgFillColor(g_app.vg, rgb(55, 55, 55));
+      nvgFillColor(
+        g_app.vg,
+        g_app.pressedKeyboardAction == 1
+          ? rgb(90, 120, 170)
+          : rgb(55, 55, 55));
       nvgFill(g_app.vg);
 
-      nvgText(
-        g_app.vg,
-        actionX + actionWidth * 0.5f,
-        rowY + kKeyboardKeyHeight * 0.5f,
-        "Space",
-        nullptr);
+      {
+        const float cx = actionX + actionWidth * 0.5f;
+        const float cy = rowY + kKeyboardKeyHeight * 0.5f;
+
+        nvgBeginPath(g_app.vg);
+        nvgRoundedRect(
+          g_app.vg,
+          cx - 60.0f,
+          cy - 8.0f,
+          120.0f,
+          16.0f,
+          8.0f);
+        nvgFillColor(g_app.vg, rgb(230, 230, 230));
+        nvgFill(g_app.vg);
+      }
 
       actionX += actionWidth + kKeyboardKeyGap;
 
@@ -1623,15 +1687,39 @@ static void draw()
         actionWidth,
         kKeyboardKeyHeight,
         8.0f);
-      nvgFillColor(g_app.vg, rgb(55, 55, 55));
+      nvgFillColor(
+        g_app.vg,
+        g_app.pressedKeyboardAction == 2
+          ? rgb(90, 120, 170)
+          : rgb(55, 55, 55));
       nvgFill(g_app.vg);
 
-      nvgText(
-        g_app.vg,
-        actionX + actionWidth * 0.5f,
-        rowY + kKeyboardKeyHeight * 0.5f,
-        "Del",
-        nullptr);
+      {
+        const float cx = actionX + actionWidth * 0.5f;
+        const float cy = rowY + kKeyboardKeyHeight * 0.5f;
+        const float s = 42.0f;
+
+        nvgBeginPath(g_app.vg);
+        nvgMoveTo(g_app.vg, cx - s, cy);
+        nvgLineTo(g_app.vg, cx - s * 0.4f, cy - s * 0.6f);
+        nvgLineTo(g_app.vg, cx + s * 0.9f, cy - s * 0.6f);
+        nvgLineTo(g_app.vg, cx + s * 0.9f, cy + s * 0.6f);
+        nvgLineTo(g_app.vg, cx - s * 0.4f, cy + s * 0.6f);
+        nvgClosePath(g_app.vg);
+        nvgFillColor(g_app.vg, rgb(230, 230, 230));
+        nvgFill(g_app.vg);
+
+        const float xs = s * 0.32f;
+
+        nvgBeginPath(g_app.vg);
+        nvgMoveTo(g_app.vg, cx - xs, cy - xs);
+        nvgLineTo(g_app.vg, cx + xs, cy + xs);
+        nvgMoveTo(g_app.vg, cx + xs, cy - xs);
+        nvgLineTo(g_app.vg, cx - xs, cy + xs);
+        nvgStrokeColor(g_app.vg, rgb(55, 55, 55));
+        nvgStrokeWidth(g_app.vg, 5.0f);
+        nvgStroke(g_app.vg);
+      }
     }
   }
 
@@ -1823,7 +1911,20 @@ static int32_t handleInput(
       AMOTION_EVENT_ACTION_DOWN)
   {
     if (g_app.searchActive && y >= getKeyboardTop())
+    {
+      int r = -1;
+      int c = -1;
+      int a = -1;
+
+      if (hitTestKeyboard(x, y, r, c, a))
+      {
+        g_app.pressedKeyboardRow = r;
+        g_app.pressedKeyboardCol = c;
+        g_app.pressedKeyboardAction = a;
+      }
+
       return 1;
+    }
 
     if (isOnSearchButton(x, y))
       return 1;
@@ -1850,6 +1951,9 @@ static int32_t handleInput(
       if (!g_app.searchActive)
       {
         g_app.searchQuery.clear();
+        g_app.pressedKeyboardRow = -1;
+        g_app.pressedKeyboardCol = -1;
+        g_app.pressedKeyboardAction = -1;
         rebuildFilter();
         buildUi();
       }
@@ -1857,11 +1961,33 @@ static int32_t handleInput(
       return 1;
     }
 
-    if (g_app.searchActive && y >= getKeyboardTop())
+    if (g_app.pressedKeyboardRow >= 0 ||
+        g_app.pressedKeyboardCol >= 0 ||
+        g_app.pressedKeyboardAction >= 0)
     {
-      handleKeyboardTap(x, y);
+      int r = -1;
+      int c = -1;
+      int a = -1;
+
+      if (hitTestKeyboard(x, y, r, c, a))
+      {
+        if (r == g_app.pressedKeyboardRow &&
+            c == g_app.pressedKeyboardCol &&
+            a == g_app.pressedKeyboardAction)
+        {
+          applyKeyboardKey(r, c, a);
+        }
+      }
+
+      g_app.pressedKeyboardRow = -1;
+      g_app.pressedKeyboardCol = -1;
+      g_app.pressedKeyboardAction = -1;
+
       return 1;
     }
+
+    if (g_app.searchActive && y >= getKeyboardTop())
+      return 1;
 
     if (isOnSidebar(x, y))
     {

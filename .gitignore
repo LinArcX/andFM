@@ -3,6 +3,7 @@ build/*
 gmon.out
 garbage/*
 patches/*
+skills.txt
 package.json
 node_modules/
 breakpoints.json

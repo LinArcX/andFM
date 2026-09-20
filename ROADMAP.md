@@ -7,7 +7,7 @@
 - [ ] Support file operations (copy, move, delete, rename)
 - [ ] Add multi-selection
 - [ ] Integrate with Android storage permissions
-- [ ] Implement search functionality
+- [x] Implement search functionality
 - [ ] Add bookmarks
 - [ ] Improve UI with icons and theming
 - [ ] Add support for different view modes (list, grid)

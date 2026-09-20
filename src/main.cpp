@@ -48,8 +48,12 @@ struct App
 
   std::string currentPath;
   std::vector<FileEntry> entries;
+  std::vector<int> filteredIndices;
   std::string pendingNavigate;
   float scrollOffset = 0.0f;
+
+  bool searchActive = false;
+  std::string searchQuery;
 
   struct BreadcrumbItem
   {
@@ -76,6 +80,24 @@ static const float kSidebarItemHeight = 132.0f;
 
 static const float kScrollButtonSize = 108.0f;
 static const float kScrollButtonMargin = 24.0f;
+
+static const float kSearchButtonSize = 72.0f;
+static const float kSearchButtonMargin = 30.0f;
+
+static const float kKeyboardKeyHeight = 108.0f;
+static const float kKeyboardKeyGap = 10.0f;
+static const float kKeyboardPadding = 12.0f;
+
+static const char *g_keyboardRows[] =
+{
+  "1234567890",
+  "qwertyuiop",
+  "asdfghjkl",
+  "zxcvbnm._-",
+};
+
+static const int g_keyboardRowCount =
+  static_cast<int>(sizeof(g_keyboardRows) / sizeof(g_keyboardRows[0]));
 
 struct SidebarPlace
 {
@@ -105,6 +127,17 @@ static NVGcolor rgb(
   unsigned char b)
 {
   return nvgRGB(r, g, b);
+}
+
+static float getKeyboardTop()
+{
+  const float keyboardHeight =
+    kKeyboardPadding * 2.0f +
+    static_cast<float>(g_keyboardRowCount) *
+      (kKeyboardKeyHeight + kKeyboardKeyGap) +
+    kKeyboardKeyHeight;
+
+  return static_cast<float>(g_app.height) - keyboardHeight;
 }
 
 static void drawFolderIcon(
@@ -607,6 +640,46 @@ static int createEntryItem(int entryIndex)
   return item;
 }
 
+static void rebuildFilter()
+{
+  g_app.filteredIndices.clear();
+  g_app.scrollOffset = 0.0f;
+
+  if (g_app.searchQuery.empty())
+  {
+    for (size_t i = 0; i < g_app.entries.size(); i++)
+      g_app.filteredIndices.push_back(static_cast<int>(i));
+
+    return;
+  }
+
+  std::string needle = g_app.searchQuery;
+
+  for (size_t i = 0; i < needle.size(); i++)
+  {
+    const char c = needle[i];
+
+    if (c >= 'A' && c <= 'Z')
+      needle[i] = static_cast<char>(c - 'A' + 'a');
+  }
+
+  for (size_t i = 0; i < g_app.entries.size(); i++)
+  {
+    std::string haystack = g_app.entries[i].name;
+
+    for (size_t j = 0; j < haystack.size(); j++)
+    {
+      const char c = haystack[j];
+
+      if (c >= 'A' && c <= 'Z')
+        haystack[j] = static_cast<char>(c - 'A' + 'a');
+    }
+
+    if (haystack.find(needle) != std::string::npos)
+      g_app.filteredIndices.push_back(static_cast<int>(i));
+  }
+}
+
 static bool readDirectory(const std::string &path)
 {
   DIR *pDir = opendir(path.c_str());
@@ -676,6 +749,8 @@ static bool readDirectory(const std::string &path)
 
   closedir(pDir);
 
+  rebuildFilter();
+
   return true;
 }
 
@@ -741,10 +816,10 @@ static void buildUi()
       topSpacer);
   }
 
-  for (size_t i = 0; i < g_app.entries.size(); i++)
+  for (size_t i = 0; i < g_app.filteredIndices.size(); i++)
   {
     const int item =
-      createEntryItem(static_cast<int>(i));
+      createEntryItem(g_app.filteredIndices[i]);
 
     uiSetLayout(
       g_app.ui,
@@ -789,6 +864,110 @@ static void buildUi()
   }
 
   uiEndLayout(g_app.ui);
+}
+
+static bool isOnSearchButton(
+  float x,
+  float y)
+{
+  const float btnX =
+    static_cast<float>(g_app.width) - kSearchButtonSize - kSearchButtonMargin;
+
+  const float btnY =
+    kTopInset + kToolbarHeight * 0.5f - kSearchButtonSize * 0.5f;
+
+  return x >= btnX &&
+         x <= btnX + kSearchButtonSize &&
+         y >= btnY &&
+         y <= btnY + kSearchButtonSize;
+}
+
+static void handleKeyboardTap(
+  float x,
+  float y)
+{
+  const float screenWidth = static_cast<float>(g_app.width);
+  const float keyboardTop = getKeyboardTop();
+
+  const float totalGaps = 9.0f * kKeyboardKeyGap;
+  const float keyWidth =
+    (screenWidth - kKeyboardPadding * 2.0f - totalGaps) / 10.0f;
+
+  float rowY = keyboardTop + kKeyboardPadding;
+
+  for (int r = 0; r < g_keyboardRowCount; r++)
+  {
+    const char *pRow = g_keyboardRows[r];
+    const int n = static_cast<int>(strlen(pRow));
+
+    const float rowWidth =
+      static_cast<float>(n) * keyWidth +
+      static_cast<float>(n - 1) * kKeyboardKeyGap;
+
+    const float rowX = (screenWidth - rowWidth) * 0.5f;
+
+    if (y >= rowY && y <= rowY + kKeyboardKeyHeight)
+    {
+      for (int c = 0; c < n; c++)
+      {
+        const float keyX =
+          rowX + static_cast<float>(c) * (keyWidth + kKeyboardKeyGap);
+
+        if (x >= keyX && x <= keyX + keyWidth)
+        {
+          g_app.searchQuery += pRow[c];
+          rebuildFilter();
+          buildUi();
+          return;
+        }
+      }
+
+      return;
+    }
+
+    rowY += kKeyboardKeyHeight + kKeyboardKeyGap;
+  }
+
+  const float actionWidth =
+    (screenWidth - kKeyboardPadding * 2.0f - kKeyboardKeyGap * 2.0f) / 3.0f;
+
+  float actionX = kKeyboardPadding;
+
+  if (y >= rowY && y <= rowY + kKeyboardKeyHeight)
+  {
+    if (x >= actionX && x <= actionX + actionWidth)
+    {
+      g_app.searchActive = false;
+      g_app.searchQuery.clear();
+      rebuildFilter();
+      buildUi();
+      return;
+    }
+
+    actionX += actionWidth + kKeyboardKeyGap;
+
+    if (x >= actionX && x <= actionX + actionWidth)
+    {
+      g_app.searchQuery += ' ';
+      rebuildFilter();
+      buildUi();
+      return;
+    }
+
+    actionX += actionWidth + kKeyboardKeyGap;
+
+    if (x >= actionX && x <= actionX + actionWidth)
+    {
+      if (!g_app.searchQuery.empty())
+      {
+        g_app.searchQuery.pop_back();
+        rebuildFilter();
+        buildUi();
+      }
+
+      return;
+    }
+  }
 }
 
 static void drawItem(
@@ -997,7 +1176,8 @@ static void draw()
   {
     g_app.breadcrumbs.clear();
     float bx = 30.0f;
-    const float maxX = screenWidth - 30.0f;
+    const float maxX =
+      screenWidth - kSearchButtonSize - kSearchButtonMargin - 30.0f;
     const float itemHeight = 72.0f;
     const float itemY = toolbarCenterY - itemHeight * 0.5f;
 
@@ -1104,6 +1284,50 @@ static void draw()
     }
   }
 
+  {
+    const float btnX =
+      screenWidth - kSearchButtonSize - kSearchButtonMargin;
+
+    const float btnY =
+      toolbarCenterY - kSearchButtonSize * 0.5f;
+
+    nvgBeginPath(g_app.vg);
+    nvgRoundedRect(
+      g_app.vg,
+      btnX,
+      btnY,
+      kSearchButtonSize,
+      kSearchButtonSize,
+      6.0f);
+    nvgFillColor(
+      g_app.vg,
+      g_app.searchActive
+        ? rgb(70, 110, 160)
+        : rgb(55, 55, 55));
+    nvgFill(g_app.vg);
+
+    nvgBeginPath(g_app.vg);
+    nvgCircle(
+      g_app.vg,
+      btnX + kSearchButtonSize * 0.42f,
+      btnY + kSearchButtonSize * 0.42f,
+      kSearchButtonSize * 0.20f);
+    nvgStrokeColor(g_app.vg, rgb(220, 220, 220));
+    nvgStrokeWidth(g_app.vg, 4.0f);
+    nvgStroke(g_app.vg);
+
+    nvgBeginPath(g_app.vg);
+    nvgMoveTo(
+      g_app.vg,
+      btnX + kSearchButtonSize * 0.56f,
+      btnY + kSearchButtonSize * 0.56f);
+    nvgLineTo(
+      g_app.vg,
+      btnX + kSearchButtonSize * 0.76f,
+      btnY + kSearchButtonSize * 0.76f);
+    nvgStroke(g_app.vg);
+  }
+
   nvgSave(g_app.vg);
   nvgScissor(
     g_app.vg,
@@ -1149,8 +1373,21 @@ static void draw()
   nvgFillColor(g_app.vg, rgb(28, 28, 28));
   nvgFill(g_app.vg);
 
-  const std::string statusText =
-    std::to_string(g_app.entries.size()) + " items";
+  std::string statusText;
+
+  if (g_app.searchActive)
+  {
+    statusText =
+      std::to_string(g_app.filteredIndices.size()) +
+      " / " +
+      std::to_string(g_app.entries.size()) +
+      " items";
+  }
+  else
+  {
+    statusText =
+      std::to_string(g_app.entries.size()) + " items";
+  }
 
   nvgFontSize(g_app.vg, 33.0f);
   nvgFillColor(g_app.vg, rgb(140, 140, 140));
@@ -1214,6 +1451,185 @@ static void draw()
       "v",
       nullptr);
     nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+  }
+
+  if (g_app.searchActive)
+  {
+    const float searchBarRight =
+      screenWidth - kSearchButtonSize - kSearchButtonMargin;
+
+    nvgBeginPath(g_app.vg);
+    nvgRect(
+      g_app.vg,
+      0.0f,
+      kTopInset,
+      searchBarRight,
+      toolbarHeight);
+    nvgFillColor(g_app.vg, rgb(48, 48, 48));
+    nvgFill(g_app.vg);
+
+    nvgBeginPath(g_app.vg);
+    nvgRect(
+      g_app.vg,
+      0.0f,
+      kTopInset + toolbarHeight - 2.0f,
+      searchBarRight,
+      2.0f);
+    nvgFillColor(g_app.vg, rgb(70, 110, 160));
+    nvgFill(g_app.vg);
+
+    nvgFontSize(g_app.vg, 40.0f);
+    nvgFontFace(g_app.vg, "default");
+    nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+
+    std::string displayQuery = g_app.searchQuery;
+
+    if (displayQuery.empty())
+      displayQuery = "Search...";
+
+    nvgFillColor(
+      g_app.vg,
+      g_app.searchQuery.empty()
+        ? rgb(120, 120, 120)
+        : rgb(230, 230, 230));
+
+    nvgText(
+      g_app.vg,
+      36.0f,
+      kTopInset + toolbarHeight * 0.5f,
+      displayQuery.c_str(),
+      nullptr);
+
+    const float keyboardTop = getKeyboardTop();
+    const float keyboardHeight = screenHeight - keyboardTop;
+
+    nvgBeginPath(g_app.vg);
+    nvgRect(
+      g_app.vg,
+      0.0f,
+      keyboardTop,
+      screenWidth,
+      keyboardHeight);
+    nvgFillColor(g_app.vg, rgb(28, 28, 28));
+    nvgFill(g_app.vg);
+
+    const float totalGaps = 9.0f * kKeyboardKeyGap;
+    const float keyWidth =
+      (screenWidth - kKeyboardPadding * 2.0f - totalGaps) / 10.0f;
+
+    float rowY = keyboardTop + kKeyboardPadding;
+
+    for (int r = 0; r < g_keyboardRowCount; r++)
+    {
+      const char *pRow = g_keyboardRows[r];
+      const int n = static_cast<int>(strlen(pRow));
+
+      const float rowWidth =
+        static_cast<float>(n) * keyWidth +
+        static_cast<float>(n - 1) * kKeyboardKeyGap;
+
+      float keyX = (screenWidth - rowWidth) * 0.5f;
+
+      for (int c = 0; c < n; c++)
+      {
+        nvgBeginPath(g_app.vg);
+        nvgRoundedRect(
+          g_app.vg,
+          keyX,
+          rowY,
+          keyWidth,
+          kKeyboardKeyHeight,
+          8.0f);
+        nvgFillColor(g_app.vg, rgb(55, 55, 55));
+        nvgFill(g_app.vg);
+
+        char label[2] = { pRow[c], '\0' };
+
+        nvgFontSize(g_app.vg, 48.0f);
+        nvgFontFace(g_app.vg, "default");
+        nvgTextAlign(g_app.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(g_app.vg, rgb(230, 230, 230));
+        nvgText(
+          g_app.vg,
+          keyX + keyWidth * 0.5f,
+          rowY + kKeyboardKeyHeight * 0.5f,
+          label,
+          nullptr);
+
+        keyX += keyWidth + kKeyboardKeyGap;
+      }
+
+      rowY += kKeyboardKeyHeight + kKeyboardKeyGap;
+    }
+
+    {
+      const float actionWidth =
+        (screenWidth - kKeyboardPadding * 2.0f - kKeyboardKeyGap * 2.0f) / 3.0f;
+
+      float actionX = kKeyboardPadding;
+
+      nvgBeginPath(g_app.vg);
+      nvgRoundedRect(
+        g_app.vg,
+        actionX,
+        rowY,
+        actionWidth,
+        kKeyboardKeyHeight,
+        8.0f);
+      nvgFillColor(g_app.vg, rgb(90, 55, 55));
+      nvgFill(g_app.vg);
+
+      nvgFontSize(g_app.vg, 40.0f);
+      nvgFontFace(g_app.vg, "default");
+      nvgTextAlign(g_app.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+      nvgFillColor(g_app.vg, rgb(230, 230, 230));
+      nvgText(
+        g_app.vg,
+        actionX + actionWidth * 0.5f,
+        rowY + kKeyboardKeyHeight * 0.5f,
+        "Close",
+        nullptr);
+
+      actionX += actionWidth + kKeyboardKeyGap;
+
+      nvgBeginPath(g_app.vg);
+      nvgRoundedRect(
+        g_app.vg,
+        actionX,
+        rowY,
+        actionWidth,
+        kKeyboardKeyHeight,
+        8.0f);
+      nvgFillColor(g_app.vg, rgb(55, 55, 55));
+      nvgFill(g_app.vg);
+
+      nvgText(
+        g_app.vg,
+        actionX + actionWidth * 0.5f,
+        rowY + kKeyboardKeyHeight * 0.5f,
+        "Space",
+        nullptr);
+
+      actionX += actionWidth + kKeyboardKeyGap;
+
+      nvgBeginPath(g_app.vg);
+      nvgRoundedRect(
+        g_app.vg,
+        actionX,
+        rowY,
+        actionWidth,
+        kKeyboardKeyHeight,
+        8.0f);
+      nvgFillColor(g_app.vg, rgb(55, 55, 55));
+      nvgFill(g_app.vg);
+
+      nvgText(
+        g_app.vg,
+        actionX + actionWidth * 0.5f,
+        rowY + kKeyboardKeyHeight * 0.5f,
+        "Del",
+        nullptr);
+    }
   }
 
   nvgEndFrame(g_app.vg);
@@ -1403,6 +1819,12 @@ static int32_t handleInput(
   if (actionType ==
       AMOTION_EVENT_ACTION_DOWN)
   {
+    if (g_app.searchActive && y >= getKeyboardTop())
+      return 1;
+
+    if (isOnSearchButton(x, y))
+      return 1;
+
     if (!isInListArea(x, y))
       return 1;
 
@@ -1418,6 +1840,26 @@ static int32_t handleInput(
   if (actionType ==
       AMOTION_EVENT_ACTION_UP)
   {
+    if (isOnSearchButton(x, y))
+    {
+      g_app.searchActive = !g_app.searchActive;
+
+      if (!g_app.searchActive)
+      {
+        g_app.searchQuery.clear();
+        rebuildFilter();
+        buildUi();
+      }
+
+      return 1;
+    }
+
+    if (g_app.searchActive && y >= getKeyboardTop())
+    {
+      handleKeyboardTap(x, y);
+      return 1;
+    }
+
     if (isOnSidebar(x, y))
     {
       handleSidebarClick(y);
@@ -1580,6 +2022,9 @@ void android_main(
 
       if (!g_app.pendingNavigate.empty())
       {
+        g_app.searchActive = false;
+        g_app.searchQuery.clear();
+
         if (readDirectory(g_app.pendingNavigate))
         {
           g_app.currentPath = g_app.pendingNavigate;

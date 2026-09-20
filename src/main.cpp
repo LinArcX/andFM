@@ -57,7 +57,7 @@ static App g_app;
 static const float kTopInset = 50.0f;
 static const float kToolbarHeight = 36.0f;
 static const float kSidebarWidth = 140.0f;
-static const float kBottomNavHeight = 50.0f;
+static const float kBottomNavHeight = 70.0f;
 static const float kStatusBarHeight = 22.0f;
 
 static const float kBackButtonX = 12.0f;
@@ -738,6 +738,9 @@ static void draw()
 
   const float bottomNavY =
     screenHeight - statusHeight - kBottomNavHeight;
+
+  const float backButtonY =
+    bottomNavY + (kBottomNavHeight - kBackButtonH) * 0.5f - 8.0f;
   const float statusY = screenHeight - statusHeight;
 
   nvgBeginPath(g_app.vg);
@@ -768,7 +771,7 @@ static void draw()
   nvgRoundedRect(
     g_app.vg,
     kBackButtonX,
-    bottomNavY + (kBottomNavHeight - kBackButtonH) * 0.5f,
+    backButtonY,
     kBackButtonW,
     kBackButtonH,
     6.0f);
@@ -786,7 +789,7 @@ static void draw()
   nvgText(
     g_app.vg,
     kBackButtonX + kBackButtonW * 0.5f,
-    bottomNavY + kBottomNavHeight * 0.5f,
+    backButtonY + kBackButtonH * 0.5f,
     "<  Back",
     nullptr);
 
@@ -946,7 +949,7 @@ static bool isOnBackButton(float x, float y)
     static_cast<float>(g_app.height) - kStatusBarHeight - kBottomNavHeight;
 
   const float buttonY =
-    bottomNavY + (kBottomNavHeight - kBackButtonH) * 0.5f;
+    bottomNavY + (kBottomNavHeight - kBackButtonH) * 0.5f - 8.0f;
 
   return x >= kBackButtonX &&
          x <= kBackButtonX + kBackButtonW &&

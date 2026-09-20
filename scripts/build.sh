@@ -502,6 +502,8 @@ cat > "$WORK_DIR/AndroidManifest.xml" <<EOF
         android:minSdkVersion="23"
         android:targetSdkVersion="$API_LEVEL" />
 
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+
     <application
         android:allowBackup="false"
         android:debuggable="$ANDROID_DEBUGGABLE"

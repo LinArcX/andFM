@@ -201,17 +201,24 @@ menu () {
       adb -s 127.0.0.1:5555 shell am start -n org.linarcx.andFM/android.app.NativeActivity
       ;;
     "pair to wifi and install adb")
-      echo "Enter the port"
-      read portNumber
-
-      echo "Enter the pair code"
-      read pairCode
-
-      echo "Pairing"
-      adb pair 192.168.1.58:$portNumber $pairCode
-
       echo "Showing Devices"
       output=$(adb devices)
+ 
+      if [[ "$output" == *"adb-"* ]]; then
+        echo "Found an ADB device"
+      else
+        echo "No ADB device found"
+        echo "Enter the port"
+        read portNumber
+
+        echo "Enter the pair code"
+        read pairCode
+
+        echo "Pairing"
+        adb pair 192.168.1.58:$portNumber $pairCode
+        output=$(adb devices)
+      fi
+
       device=$(echo "$output" | awk 'NR==2 {print $1}')
       echo "Device: $device"
 

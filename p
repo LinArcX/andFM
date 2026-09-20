@@ -37,14 +37,11 @@
 
 menu () {
   commands=(
-    # patch
-    "create patch"
-
-    # adb
-    "adb connect" "adb install" "adb run" "adb log"
+    # main
+    "build(debug)" "create patch" "adb connect" "adb install" "adb run" "adb log"
 
     # debug
-    "build(debug)" "clean(debug)"
+    "clean(debug)"
 
     # release
     "build(release)" "clean(release)"
@@ -122,8 +119,28 @@ menu () {
       fi
       ;;
     "adb connect")
-      # adb connect 127.0.0.1:5555
       # adb devices
+      # adb connect 127.0.0.1:5555
+      devices=$(adb devices | awk 'NR > 1 && $2 == "device" {print $1}')
+
+      if [ -z "$devices" ]; then
+        printf '\033[31m✗ Error:\033[0m No ADB devices found.\n' >&2
+        exit 1
+      fi
+      
+      selected=$(printf '%s\n' "$devices" | fzf \
+        --height=40% \
+        --layout=reverse \
+        --border \
+        --prompt='ADB device > ')
+      
+      if [ -z "$selected" ]; then
+        exit 0
+      fi
+      
+      printf '\033[36m→ Connecting to:\033[0m %s\n' "$selected"
+      
+      adb connect "$selected"
       ;;
     "adb install")
       # adb -s 127.0.0.1:5555 install -r "/mnt/D/workspace/c++/active/andFM/build/andFM.apk"

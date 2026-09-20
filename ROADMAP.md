@@ -1,5 +1,6 @@
 # ROADMAP
 
+- [ ] Use an icon for application.
 - [ ] Implement file system browsing (list files/directories)
 - [x] Add navigation (back, forward, up)
 - [x] Add clickable breadcrumb navigation

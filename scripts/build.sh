@@ -6,7 +6,7 @@ APP_NAME="andFM"
 PACKAGE_NAME="org.linarcx.andFM"
 
 API_LEVEL="30"
-ABI="x86_64"
+ABI="arm64-v8a"
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 BUILD_ROOT="$ROOT_DIR/build"
@@ -29,7 +29,7 @@ HOST_TAG="linux-x86_64"
 CC="$NDK_DIR/toolchains/llvm/prebuilt/$HOST_TAG/bin/clang"
 CXX="$NDK_DIR/toolchains/llvm/prebuilt/$HOST_TAG/bin/clang++"
 
-TARGET="$ABI-linux-android$API_LEVEL"
+TARGET="aarch64-linux-android$API_LEVEL"
 
 AAPT="$BUILD_TOOLS_DIR/aapt"
 ZIPALIGN="$BUILD_TOOLS_DIR/zipalign"

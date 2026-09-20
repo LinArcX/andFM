@@ -39,7 +39,7 @@ The APK will be at `build/debug/andFM.apk` or `build/release/andFM.apk`.
 
 ## Running
 
-Install on an Android device or emulator (x86_64):
+Install on an Android device or emulator (arm64-v8a):
 
 ```bash
 adb install -r build/debug/andFM.apk

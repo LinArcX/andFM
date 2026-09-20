@@ -39,6 +39,7 @@ menu () {
   commands=(
     # main
     "build(debug)" "create patch" "qemu(android x86-64)" "adb connect" "adb install"
+    "pair to wifi and install adb"
     "adb uninstall" "adb run" "adb log" "adb close apk"
     "adb reboot android OS" "adb poweroff android OS"
 
@@ -198,6 +199,64 @@ menu () {
 
       echo "--> Running andFM..."
       adb -s 127.0.0.1:5555 shell am start -n org.linarcx.andFM/android.app.NativeActivity
+      ;;
+    "pair to wifi and install adb")
+      echo "Enter the port"
+      read portNumber
+
+      echo "Enter the pair code"
+      read pairCode
+
+      echo "Pairing"
+      adb pair 192.168.1.58:$portNumber $pairCode
+
+      echo "Showing Devices"
+      output=$(adb devices)
+      device=$(echo "$output" | awk 'NR==2 {print $1}')
+      echo "Device: $device"
+
+      echo "Connecting to device"
+      adb connect $device
+
+      echo "Setting time-out for 1 day"
+      adb -s $device shell settings put system screen_off_timeout 86400000
+
+      # need to extract to separate function
+      PROJECT_DIR="/mnt/D/workspace/c++/active/andFM"
+      DEBUG_DIR="$PROJECT_DIR/build/debug"
+      RELEASE_DIR="$PROJECT_DIR/build/release"
+ 
+      APK_LIST=$(
+        find "$DEBUG_DIR" "$RELEASE_DIR" \
+          -type f \
+          -name '*.apk' \
+          2>/dev/null
+      )
+      
+      if [ -z "$APK_LIST" ]; then
+        echo "No APK files found in:"
+        echo "  $DEBUG_DIR"
+        echo "  $RELEASE_DIR"
+        exit 1
+      fi
+      
+      APK=$(printf '%s\n' "$APK_LIST" | fzf \
+        --height=40% \
+        --layout=reverse \
+        --border \
+        --prompt="Select APK: " \
+        --header="Choose an APK to install")
+      
+      if [ -z "$APK" ]; then
+        echo "Installation cancelled."
+        exit 0
+      fi
+      # need to extract to separate function
+ 
+      echo "--> Installing:"
+      echo "  $APK"
+      adb -s $device uninstall org.linarcx.andFM
+      adb -s $device install -r "$APK"
       ;;
     "adb uninstall")
       adb -s 127.0.0.1:5555 uninstall org.linarcx.andFM

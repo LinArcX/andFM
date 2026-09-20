@@ -2223,6 +2223,40 @@ static int getEntryIndexAt(float x, float y)
   return g_app.filteredIndices[rowIdx];
 }
 
+static bool isAtHomeDirectory()
+{
+  std::string p = g_app.currentPath;
+
+  if (p.empty())
+    return true;
+
+  while (p.size() > 1 && p.back() == '/')
+    p.pop_back();
+
+  if (p == "/")
+    return true;
+
+  return p == "/storage/emulated/0";
+}
+
+static std::string getParentPath(const std::string &path)
+{
+  std::string p = path;
+
+  if (p.empty() || p == "/")
+    return "/";
+
+  while (p.size() > 1 && p.back() == '/')
+    p.pop_back();
+
+  const size_t pos = p.find_last_of('/');
+
+  if (pos == std::string::npos || pos == 0)
+    return "/";
+
+  return p.substr(0, pos + 1);
+}
+
 static float getMaxScroll()
 {
   const float contentHeight =
@@ -2291,10 +2325,29 @@ static int32_t handleInput(
 
       if (keyAction == AKEY_EVENT_ACTION_UP)
       {
-        g_app.showExitDialog = true;
+        if (g_app.searchActive)
+        {
+          g_app.searchActive = false;
+          g_app.searchQuery.clear();
+          g_app.searchCaretPos = 0;
+          g_app.pressedKeyboardRow = -1;
+          g_app.pressedKeyboardCol = -1;
+          g_app.pressedKeyboardAction = -1;
+          rebuildFilter();
+          buildUi();
+        }
+        else if (!isAtHomeDirectory())
+        {
+          g_app.pendingNavigate =
+            getParentPath(g_app.currentPath);
+        }
+        else
+        {
+          g_app.showExitDialog = true;
 
-        if (g_app.ui)
-          uiSetButton(g_app.ui, 0, 0, false);
+          if (g_app.ui)
+            uiSetButton(g_app.ui, 0, 0, false);
+        }
       }
 
       return 1;

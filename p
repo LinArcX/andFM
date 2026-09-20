@@ -191,8 +191,10 @@ menu () {
       
       echo "--> Installing:"
       echo "  $APK"
-      
       adb -s 127.0.0.1:5555 install -r "$APK"
+
+      echo "Granting storage permission..."
+      adb -s 127.0.0.1:5555 shell pm grant org.linarcx.andFM android.permission.READ_EXTERNAL_STORAGE 2>/dev/null
 
       echo "--> Running andFM..."
       adb -s 127.0.0.1:5555 shell am start -n org.linarcx.andFM/android.app.NativeActivity

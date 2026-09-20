@@ -51,6 +51,58 @@ struct App
 
 static App g_app;
 
+static NVGcolor rgb(
+  unsigned char r,
+  unsigned char g,
+  unsigned char b)
+{
+  return nvgRGB(r, g, b);
+}
+
+static void drawFolderIcon(
+  float x,
+  float y,
+  float size)
+{
+  nvgBeginPath(g_app.vg);
+  nvgRoundedRect(
+    g_app.vg,
+    x,
+    y + size * 0.15f,
+    size,
+    size * 0.80f,
+    2.0f);
+  nvgFillColor(g_app.vg, rgb(220, 180, 100));
+  nvgFill(g_app.vg);
+
+  nvgBeginPath(g_app.vg);
+  nvgRoundedRect(
+    g_app.vg,
+    x,
+    y,
+    size * 0.55f,
+    size * 0.25f,
+    1.5f);
+  nvgFill(g_app.vg);
+}
+
+static void drawFileIcon(
+  float x,
+  float y,
+  float size)
+{
+  nvgBeginPath(g_app.vg);
+  nvgRoundedRect(
+    g_app.vg,
+    x + size * 0.10f,
+    y,
+    size * 0.80f,
+    size,
+    2.0f);
+  nvgFillColor(g_app.vg, rgb(120, 130, 150));
+  nvgFill(g_app.vg);
+}
+
 static long long getTimeMilliseconds()
 {
   const auto now = std::chrono::steady_clock::now();
@@ -304,6 +356,10 @@ static bool readDirectory(const std::string &path)
 
 static void buildUi()
 {
+  const int toolbarHeight = 36;
+  const int statusHeight = 22;
+  const int sidebarWidth = 140;
+
   uiBeginLayout(g_app.ui);
 
   const int root = uiItem(g_app.ui);
@@ -330,32 +386,24 @@ static void buildUi()
     column,
     UI_HFILL | UI_VFILL);
 
-  uiSetMargins(
-    g_app.ui,
-    column,
-    24,
-    24,
-    24,
-    24);
-
   {
-    const int title = uiItem(g_app.ui);
+    const int topSpacer = uiItem(g_app.ui);
 
     uiSetSize(
       g_app.ui,
-      title,
+      topSpacer,
       0,
-      BND_WIDGET_HEIGHT);
+      toolbarHeight);
 
     uiSetLayout(
       g_app.ui,
-      title,
+      topSpacer,
       UI_HFILL);
 
     uiInsert(
       g_app.ui,
       column,
-      title);
+      topSpacer);
   }
 
   for (size_t i = 0; i < g_app.entries.size(); i++)
@@ -368,10 +416,38 @@ static void buildUi()
       item,
       UI_HFILL);
 
+    uiSetMargins(
+      g_app.ui,
+      item,
+      sidebarWidth,
+      0,
+      0,
+      0);
+
     uiInsert(
       g_app.ui,
       column,
       item);
+  }
+
+  {
+    const int bottomSpacer = uiItem(g_app.ui);
+
+    uiSetSize(
+      g_app.ui,
+      bottomSpacer,
+      0,
+      statusHeight);
+
+    uiSetLayout(
+      g_app.ui,
+      bottomSpacer,
+      UI_HFILL);
+
+    uiInsert(
+      g_app.ui,
+      column,
+      bottomSpacer);
   }
 
   uiEndLayout(g_app.ui);
@@ -403,16 +479,52 @@ static void drawItem(
     const FileEntry &entry =
       g_app.entries[pData->entryIndex];
 
-    bndToolButton(
+    if ((state & UI_HOT) || (state & UI_ACTIVE))
+    {
+      nvgBeginPath(g_app.vg);
+      nvgRect(
+        g_app.vg,
+        rect.x,
+        rect.y,
+        rect.w,
+        rect.h);
+      nvgFillColor(g_app.vg, rgb(45, 60, 80));
+      nvgFill(g_app.vg);
+    }
+
+    const float iconSize = 16.0f;
+    const float iconX = rect.x + 10.0f;
+    const float iconY = rect.y + (rect.h - iconSize) * 0.5f;
+
+    if (entry.isDirectory)
+    {
+      drawFolderIcon(iconX, iconY, iconSize);
+    }
+    else
+    {
+      drawFileIcon(iconX, iconY, iconSize);
+    }
+
+    nvgFontSize(g_app.vg, 14.0f);
+    nvgFontFace(g_app.vg, "default");
+    nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+    nvgFillColor(g_app.vg, rgb(210, 210, 210));
+    nvgText(
+      g_app.vg,
+      iconX + iconSize + 10.0f,
+      rect.y + rect.h * 0.5f,
+      entry.name.c_str(),
+      nullptr);
+
+    nvgBeginPath(g_app.vg);
+    nvgRect(
       g_app.vg,
       rect.x,
-      rect.y,
+      rect.y + rect.h - 1.0f,
       rect.w,
-      rect.h,
-      BND_CORNER_ALL,
-      static_cast<BNDwidgetState>(state),
-      -1,
-      entry.name.c_str());
+      1.0f);
+    nvgFillColor(g_app.vg, rgb(45, 45, 45));
+    nvgFill(g_app.vg);
   }
 
   int child =
@@ -440,9 +552,9 @@ static void draw()
     g_app.height);
 
   glClearColor(
-    0.12f,
-    0.12f,
-    0.12f,
+    0.118f,
+    0.118f,
+    0.118f,
     1.0f);
 
   glClear(
@@ -455,26 +567,135 @@ static void draw()
     static_cast<float>(g_app.height),
     1.0f);
 
-  nvgFontSize(
-    g_app.vg,
-    18.0f);
+  const float toolbarHeight = 36.0f;
+  const float statusHeight = 22.0f;
+  const float sidebarWidth = 140.0f;
+  const float screenWidth = static_cast<float>(g_app.width);
+  const float screenHeight = static_cast<float>(g_app.height);
 
-  nvgFontFace(
+  nvgBeginPath(g_app.vg);
+  nvgRect(
     g_app.vg,
-    "default");
+    0.0f,
+    0.0f,
+    screenWidth,
+    toolbarHeight);
+  nvgFillColor(g_app.vg, rgb(37, 37, 37));
+  nvgFill(g_app.vg);
 
-  nvgFillColor(
+  nvgBeginPath(g_app.vg);
+  nvgRect(
     g_app.vg,
-    nvgRGB(220, 220, 220));
+    0.0f,
+    toolbarHeight - 1.0f,
+    screenWidth,
+    1.0f);
+  nvgFillColor(g_app.vg, rgb(20, 20, 20));
+  nvgFill(g_app.vg);
 
+  const float sidebarHeight = screenHeight - toolbarHeight - statusHeight;
+
+  nvgBeginPath(g_app.vg);
+  nvgRect(
+    g_app.vg,
+    0.0f,
+    toolbarHeight,
+    sidebarWidth,
+    sidebarHeight);
+  nvgFillColor(g_app.vg, rgb(33, 33, 33));
+  nvgFill(g_app.vg);
+
+  nvgBeginPath(g_app.vg);
+  nvgRect(
+    g_app.vg,
+    sidebarWidth - 1.0f,
+    toolbarHeight,
+    1.0f,
+    sidebarHeight);
+  nvgFillColor(g_app.vg, rgb(20, 20, 20));
+  nvgFill(g_app.vg);
+
+  nvgFontSize(g_app.vg, 11.0f);
+  nvgFontFace(g_app.vg, "default");
+  nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+  nvgFillColor(g_app.vg, rgb(120, 120, 120));
   nvgText(
     g_app.vg,
-    24,
-    24,
+    14.0f,
+    toolbarHeight + 14.0f,
+    "PLACES",
+    nullptr);
+
+  const char *places[] =
+  {
+    "Home",
+    "Root",
+    "Documents",
+    "Downloads",
+    "Pictures",
+    "Videos",
+  };
+
+  nvgFontSize(g_app.vg, 13.0f);
+  nvgFillColor(g_app.vg, rgb(190, 190, 190));
+
+  for (size_t i = 0; i < sizeof(places) / sizeof(places[0]); i++)
+  {
+    const float y = toolbarHeight + 32.0f +
+      static_cast<float>(i) * 22.0f;
+
+    nvgText(
+      g_app.vg,
+      24.0f,
+      y,
+      places[i],
+      nullptr);
+  }
+
+  nvgFontSize(g_app.vg, 14.0f);
+  nvgFillColor(g_app.vg, rgb(210, 210, 210));
+  nvgText(
+    g_app.vg,
+    14.0f,
+    toolbarHeight * 0.5f,
     g_app.currentPath.c_str(),
     nullptr);
 
   drawItem(0);
+
+  const float statusY = screenHeight - statusHeight;
+
+  nvgBeginPath(g_app.vg);
+  nvgRect(
+    g_app.vg,
+    0.0f,
+    statusY,
+    screenWidth,
+    statusHeight);
+  nvgFillColor(g_app.vg, rgb(37, 37, 37));
+  nvgFill(g_app.vg);
+
+  nvgBeginPath(g_app.vg);
+  nvgRect(
+    g_app.vg,
+    0.0f,
+    statusY,
+    screenWidth,
+    1.0f);
+  nvgFillColor(g_app.vg, rgb(20, 20, 20));
+  nvgFill(g_app.vg);
+
+  const std::string statusText =
+    std::to_string(g_app.entries.size()) + " items";
+
+  nvgFontSize(g_app.vg, 11.0f);
+  nvgFillColor(g_app.vg, rgb(140, 140, 140));
+  nvgText(
+    g_app.vg,
+    12.0f,
+    statusY + statusHeight * 0.5f,
+    statusText.c_str(),
+    nullptr);
 
   nvgEndFrame(g_app.vg);
 

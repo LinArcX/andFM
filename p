@@ -38,7 +38,8 @@
 menu () {
   commands=(
     # main
-    "build(debug)" "create patch" "qemu(android x86-64)" "adb connect" "adb install" "adb run" "adb log"
+    "build(debug)" "create patch" "qemu(android x86-64)" "adb connect" "adb install" "adb uninstall" "adb run" "adb log" "adb close apk"
+    "adb reboot android OS" "adb poweroff android OS"
 
     # debug
     "clean(debug)"
@@ -153,12 +154,58 @@ menu () {
       ;;
     "adb install")
       # adb -s 127.0.0.1:5555 install -r "/mnt/D/workspace/c++/active/andFM/build/andFM.apk"
+      PROJECT_DIR="/mnt/D/workspace/c++/active/andFM"
+      DEBUG_DIR="$PROJECT_DIR/build/debug"
+      RELEASE_DIR="$PROJECT_DIR/build/release"
+      
+      APK_LIST=$(
+        find "$DEBUG_DIR" "$RELEASE_DIR" \
+          -type f \
+          -name '*.apk' \
+          2>/dev/null
+      )
+      
+      if [ -z "$APK_LIST" ]; then
+        echo "No APK files found in:"
+        echo "  $DEBUG_DIR"
+        echo "  $RELEASE_DIR"
+        exit 1
+      fi
+      
+      APK=$(printf '%s\n' "$APK_LIST" | fzf \
+        --height=40% \
+        --layout=reverse \
+        --border \
+        --prompt="Select APK: " \
+        --header="Choose an APK to install")
+      
+      if [ -z "$APK" ]; then
+        echo "Installation cancelled."
+        exit 0
+      fi
+      
+      echo "Installing:"
+      echo "  $APK"
+      
+      adb -s 127.0.0.1:5555 install -r "$APK"
+      ;;
+    "adb uninstall")
+      adb -s 127.0.0.1:5555 uninstall org.linarcx.andFM
       ;;
     "adb run")
       adb -s 127.0.0.1:5555 shell am start -n org.linarcx.andFM/android.app.NativeActivity
       ;;
     "adb log")
       adb -s 127.0.0.1:5555 logcat | grep andFM
+      ;;
+    "adb close apk")
+      adb -s 127.0.0.1:5555 shell am force-stop org.linarcx.andFM
+      ;;
+    "adb reboot android OS")
+      adb -s 127.0.0.1:5555 shell reboot -p
+      ;;
+    "adb poweroff android OS")
+      adb -s 127.0.0.1:5555 shell reboot --poweroff
       ;;
     "clean(debug)")
       echo ">>> cleaning build/debug directory"

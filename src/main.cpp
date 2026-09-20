@@ -59,6 +59,15 @@ struct App
   int pressedKeyboardCol = -1;
   int pressedKeyboardAction = -1;
 
+  float touchStartX = 0.0f;
+  float touchStartY = 0.0f;
+  float lastTouchY = 0.0f;
+  bool touchInList = false;
+  bool touchDragging = false;
+
+  bool showExitDialog = false;
+  int pressedDialogButton = -1;
+
   struct BreadcrumbItem
   {
     std::string name;
@@ -103,6 +112,13 @@ static const char *g_keyboardRows[] =
 
 static const int g_keyboardRowCount =
   static_cast<int>(sizeof(g_keyboardRows) / sizeof(g_keyboardRows[0]));
+
+static const float kDialogWidth = 840.0f;
+static const float kDialogHeight = 460.0f;
+static const float kDialogButtonHeight = 132.0f;
+static const float kDialogButtonGap = 30.0f;
+static const float kDialogButtonMargin = 30.0f;
+static const float kDragSlop = 30.0f;
 
 struct SidebarPlace
 {
@@ -1104,6 +1120,161 @@ static void drawItem(
   }
 }
 
+static int hitTestDialogButtons(float x, float y)
+{
+  const float screenWidth = static_cast<float>(g_app.width);
+  const float screenHeight = static_cast<float>(g_app.height);
+
+  const float dialogX = (screenWidth - kDialogWidth) * 0.5f;
+  const float dialogY = (screenHeight - kDialogHeight) * 0.5f;
+
+  const float btnY =
+    dialogY + kDialogHeight - kDialogButtonMargin - kDialogButtonHeight;
+
+  const float btnW =
+    (kDialogWidth -
+     kDialogButtonMargin * 2.0f -
+     kDialogButtonGap) * 0.5f;
+
+  const float yesX = dialogX + kDialogButtonMargin;
+  const float noX = yesX + btnW + kDialogButtonGap;
+
+  if (y >= btnY && y <= btnY + kDialogButtonHeight)
+  {
+    if (x >= yesX && x <= yesX + btnW)
+      return 1;
+
+    if (x >= noX && x <= noX + btnW)
+      return 2;
+  }
+
+  return 0;
+}
+
+static void drawExitDialog()
+{
+  if (!g_app.showExitDialog)
+    return;
+
+  const float screenWidth = static_cast<float>(g_app.width);
+  const float screenHeight = static_cast<float>(g_app.height);
+
+  nvgBeginPath(g_app.vg);
+  nvgRect(
+    g_app.vg,
+    0.0f,
+    0.0f,
+    screenWidth,
+    screenHeight);
+  nvgFillColor(g_app.vg, nvgRGBA(0, 0, 0, 180));
+  nvgFill(g_app.vg);
+
+  const float dialogX = (screenWidth - kDialogWidth) * 0.5f;
+  const float dialogY = (screenHeight - kDialogHeight) * 0.5f;
+
+  nvgBeginPath(g_app.vg);
+  nvgRoundedRect(
+    g_app.vg,
+    dialogX,
+    dialogY,
+    kDialogWidth,
+    kDialogHeight,
+    12.0f);
+  nvgFillColor(g_app.vg, rgb(50, 50, 50));
+  nvgFill(g_app.vg);
+
+  nvgBeginPath(g_app.vg);
+  nvgRoundedRect(
+    g_app.vg,
+    dialogX,
+    dialogY,
+    kDialogWidth,
+    kDialogHeight,
+    12.0f);
+  nvgStrokeColor(g_app.vg, rgb(90, 90, 90));
+  nvgStrokeWidth(g_app.vg, 2.0f);
+  nvgStroke(g_app.vg);
+
+  nvgFontFace(g_app.vg, "default");
+  nvgTextAlign(g_app.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+
+  nvgFontSize(g_app.vg, 52.0f);
+  nvgFillColor(g_app.vg, rgb(230, 230, 230));
+  nvgText(
+    g_app.vg,
+    dialogX + kDialogWidth * 0.5f,
+    dialogY + kDialogHeight * 0.30f,
+    "Exit andFM?",
+    nullptr);
+
+  nvgFontSize(g_app.vg, 34.0f);
+  nvgFillColor(g_app.vg, rgb(170, 170, 170));
+  nvgText(
+    g_app.vg,
+    dialogX + kDialogWidth * 0.5f,
+    dialogY + kDialogHeight * 0.52f,
+    "Are you sure you want to quit?",
+    nullptr);
+
+  const float btnY =
+    dialogY + kDialogHeight - kDialogButtonMargin - kDialogButtonHeight;
+
+  const float btnW =
+    (kDialogWidth -
+     kDialogButtonMargin * 2.0f -
+     kDialogButtonGap) * 0.5f;
+
+  const float yesX = dialogX + kDialogButtonMargin;
+  const float noX = yesX + btnW + kDialogButtonGap;
+
+  nvgBeginPath(g_app.vg);
+  nvgRoundedRect(
+    g_app.vg,
+    yesX,
+    btnY,
+    btnW,
+    kDialogButtonHeight,
+    8.0f);
+  nvgFillColor(
+    g_app.vg,
+    g_app.pressedDialogButton == 1
+      ? rgb(170, 80, 80)
+      : rgb(120, 55, 55));
+  nvgFill(g_app.vg);
+
+  nvgFontSize(g_app.vg, 42.0f);
+  nvgFillColor(g_app.vg, rgb(240, 240, 240));
+  nvgText(
+    g_app.vg,
+    yesX + btnW * 0.5f,
+    btnY + kDialogButtonHeight * 0.5f,
+    "Yes",
+    nullptr);
+
+  nvgBeginPath(g_app.vg);
+  nvgRoundedRect(
+    g_app.vg,
+    noX,
+    btnY,
+    btnW,
+    kDialogButtonHeight,
+    8.0f);
+  nvgFillColor(
+    g_app.vg,
+    g_app.pressedDialogButton == 2
+      ? rgb(80, 110, 160)
+      : rgb(55, 55, 55));
+  nvgFill(g_app.vg);
+
+  nvgFillColor(g_app.vg, rgb(240, 240, 240));
+  nvgText(
+    g_app.vg,
+    noX + btnW * 0.5f,
+    btnY + kDialogButtonHeight * 0.5f,
+    "No",
+    nullptr);
+}
+
 static void draw()
 {
   glViewport(
@@ -1723,6 +1894,8 @@ static void draw()
     }
   }
 
+  drawExitDialog();
+
   nvgEndFrame(g_app.vg);
 
   eglSwapBuffers(
@@ -1839,7 +2012,7 @@ static bool isInListArea(float x, float y)
          y <= listBottom;
 }
 
-static void handleScroll(int direction)
+static float getMaxScroll()
 {
   const float contentHeight =
     static_cast<float>(g_app.entries.size()) *
@@ -1854,10 +2027,14 @@ static void handleScroll(int direction)
   if (maxScroll < 0.0f)
     maxScroll = 0.0f;
 
-  const float step = static_cast<float>(kRowHeight) * 3.0f;
+  return maxScroll;
+}
 
-  float newOffset =
-    g_app.scrollOffset + static_cast<float>(direction) * step;
+static void applyScrollDelta(float delta)
+{
+  const float maxScroll = getMaxScroll();
+
+  float newOffset = g_app.scrollOffset + delta;
 
   if (newOffset < 0.0f)
     newOffset = 0.0f;
@@ -1872,15 +2049,51 @@ static void handleScroll(int direction)
   }
 }
 
+static void handleScroll(int direction)
+{
+  const float step = static_cast<float>(kRowHeight) * 3.0f;
+
+  applyScrollDelta(static_cast<float>(direction) * step);
+}
+
 static int32_t handleInput(
   struct android_app *,
   AInputEvent *event)
 {
-  if (AInputEvent_getType(event) !=
-      AINPUT_EVENT_TYPE_MOTION)
+  const int32_t eventType =
+    AInputEvent_getType(event);
+
+  if (eventType == AINPUT_EVENT_TYPE_KEY)
   {
+    if (AKeyEvent_getKeyCode(event) == AKEYCODE_BACK)
+    {
+      const int keyAction =
+        AKeyEvent_getAction(event);
+
+      if (g_app.showExitDialog)
+      {
+        if (keyAction == AKEY_EVENT_ACTION_UP)
+          g_app.showExitDialog = false;
+
+        return 1;
+      }
+
+      if (keyAction == AKEY_EVENT_ACTION_UP)
+      {
+        g_app.showExitDialog = true;
+
+        if (g_app.ui)
+          uiSetButton(g_app.ui, 0, 0, false);
+      }
+
+      return 1;
+    }
+
     return 0;
   }
+
+  if (eventType != AINPUT_EVENT_TYPE_MOTION)
+    return 0;
 
   const int action =
     AMotionEvent_getAction(event);
@@ -1902,6 +2115,38 @@ static int32_t handleInput(
       event,
       pointer);
 
+  if (g_app.showExitDialog)
+  {
+    if (actionType == AMOTION_EVENT_ACTION_DOWN)
+    {
+      g_app.pressedDialogButton =
+        hitTestDialogButtons(x, y);
+
+      return 1;
+    }
+
+    if (actionType == AMOTION_EVENT_ACTION_UP)
+    {
+      const int hit =
+        hitTestDialogButtons(x, y);
+
+      if (hit == 1 && g_app.pressedDialogButton == 1)
+      {
+        g_app.running = false;
+      }
+      else if (hit == 2 && g_app.pressedDialogButton == 2)
+      {
+        g_app.showExitDialog = false;
+      }
+
+      g_app.pressedDialogButton = -1;
+
+      return 1;
+    }
+
+    return 1;
+  }
+
   uiSetCursor(
     g_app.ui,
     static_cast<int>(x),
@@ -1912,6 +2157,8 @@ static int32_t handleInput(
   {
     if (g_app.searchActive && y >= getKeyboardTop())
     {
+      g_app.touchInList = false;
+
       int r = -1;
       int c = -1;
       int a = -1;
@@ -1927,10 +2174,22 @@ static int32_t handleInput(
     }
 
     if (isOnSearchButton(x, y))
+    {
+      g_app.touchInList = false;
       return 1;
+    }
 
     if (!isInListArea(x, y))
+    {
+      g_app.touchInList = false;
       return 1;
+    }
+
+    g_app.touchStartX = x;
+    g_app.touchStartY = y;
+    g_app.lastTouchY = y;
+    g_app.touchInList = true;
+    g_app.touchDragging = false;
 
     uiSetButton(
       g_app.ui,
@@ -1942,8 +2201,53 @@ static int32_t handleInput(
   }
 
   if (actionType ==
+      AMOTION_EVENT_ACTION_MOVE)
+  {
+    if (!g_app.touchInList)
+      return 1;
+
+    const float totalDx = x - g_app.touchStartX;
+    const float totalDy = y - g_app.touchStartY;
+
+    const float absDx = totalDx < 0.0f ? -totalDx : totalDx;
+    const float absDy = totalDy < 0.0f ? -totalDy : totalDy;
+
+    if (!g_app.touchDragging)
+    {
+      if (absDx > kDragSlop || absDy > kDragSlop)
+      {
+        g_app.touchDragging = true;
+        g_app.lastTouchY = y;
+
+        uiSetButton(
+          g_app.ui,
+          0,
+          0,
+          false);
+      }
+
+      return 1;
+    }
+
+    const float delta = g_app.lastTouchY - y;
+    g_app.lastTouchY = y;
+
+    applyScrollDelta(delta);
+
+    return 1;
+  }
+
+  if (actionType ==
       AMOTION_EVENT_ACTION_UP)
   {
+    const bool wasDragging = g_app.touchDragging;
+
+    g_app.touchInList = false;
+    g_app.touchDragging = false;
+
+    if (wasDragging)
+      return 1;
+
     if (isOnSearchButton(x, y))
     {
       g_app.searchActive = !g_app.searchActive;
@@ -2170,4 +2474,7 @@ void android_main(
   }
 
   shutdownEgl();
+
+  if (!app->destroyRequested)
+    ANativeActivity_finish(app->activity);
 }

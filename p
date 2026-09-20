@@ -38,7 +38,7 @@
 menu () {
   commands=(
     # main
-    "build(debug)" "create patch" "adb connect" "adb install" "adb run" "adb log"
+    "build(debug)" "create patch" "qemu(android x86-64)" "adb connect" "adb install" "adb run" "adb log"
 
     # debug
     "clean(debug)"
@@ -118,6 +118,15 @@ menu () {
         ./scripts/applyPatch.sh $file
       fi
       ;;
+    "qemu(android x86-64)")
+      qemu-system-x86_64 \
+        -enable-kvm \
+        -m 6144 \
+        -smp cpus=4 \
+        -nic user,hostfwd=tcp:127.0.0.1:5555-:5555 \
+        -drive file=~/qemu/android.qcow2,format=qcow2 &
+      echo -e "Please first run these commands in Android X86 Shell, before trying to connect adb to it:\nsu\nsetprop service.adb.tcp.port 5555\nstop adbd\nstart adbd"
+      ;;
     "adb connect")
       # adb devices
       # adb connect 127.0.0.1:5555
@@ -146,10 +155,10 @@ menu () {
       # adb -s 127.0.0.1:5555 install -r "/mnt/D/workspace/c++/active/andFM/build/andFM.apk"
       ;;
     "adb run")
-      # adb -s 127.0.0.1:5555 shell am start -n org.linarcx.andFM/android.app.NativeActivity
+      adb -s 127.0.0.1:5555 shell am start -n org.linarcx.andFM/android.app.NativeActivity
       ;;
     "adb log")
-      # adb -s 127.0.0.1:5555 logcat | grep andFM
+      adb -s 127.0.0.1:5555 logcat | grep andFM
       ;;
     "clean(debug)")
       echo ">>> cleaning build/debug directory"

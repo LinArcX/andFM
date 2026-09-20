@@ -174,13 +174,14 @@ echo "Linking..."
   "$BUILD_DIR/work/main.o" \
   "$BUILD_DIR/work/android_native_app_glue.o" \
   -shared \
+  -static-libstdc++ \
   -Wl,--gc-sections \
   -Wl,-z,relro \
   -Wl,-z,now \
   -Wl,-z,noexecstack \
   -Wl,-s \
   -Wl,-u,ANativeActivity_onCreate \
-  -o "$BUILD_DIR/work/lib/x86_64/libAndFM.so" \
+  -o "$BUILD_DIR/work/lib/x86_64/libandFM.so" \
   -landroid \
   -llog \
   -lEGL \
@@ -251,7 +252,7 @@ echo "Adding native library..."
   zip \
     -q \
     "$UNSIGNED_APK" \
-    "lib/x86_64/libAndFM.so"
+    "lib/x86_64/libandFM.so"
 )
 
 echo "Aligning APK..."
@@ -305,12 +306,11 @@ echo "Package:"
 echo "  $PACKAGE_NAME"
 echo
 echo "Install:"
-echo "  adb -s emulator-5554 install -r \"$APK\""
+echo "  adb -s 127.0.0.1:5555 install -r \"$APK\""
 echo
 echo "Run:"
-echo "  adb -s emulator-5554 shell am start -n \\"
-echo "    $PACKAGE_NAME/android.app.NativeActivity"
+echo "  adb -s 127.0.0.1:5555 shell am start -n $PACKAGE_NAME/android.app.NativeActivity"
 echo
 echo "Log:"
-echo "  adb -s emulator-5554 logcat | grep andFM"
+echo "  adb -s 127.0.0.1:5555 logcat | grep andFM"
 echo

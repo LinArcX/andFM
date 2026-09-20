@@ -11,6 +11,8 @@
 #include <vector>
 
 #include <dirent.h>
+#include <unistd.h>
+#include <sys/stat.h>
 
 #include "android_native_app_glue.h"
 
@@ -43,13 +45,46 @@ struct App
   int height = 0;
 
   bool running = true;
-  bool clicked = false;
 
   std::string currentPath;
   std::vector<FileEntry> entries;
+  std::string pendingNavigate;
+  float scrollOffset = 0.0f;
 };
 
 static App g_app;
+
+static const float kTopInset = 50.0f;
+static const float kToolbarHeight = 36.0f;
+static const float kSidebarWidth = 140.0f;
+static const float kBottomNavHeight = 50.0f;
+static const float kStatusBarHeight = 22.0f;
+
+static const float kBackButtonX = 12.0f;
+static const float kBackButtonW = 90.0f;
+static const float kBackButtonH = 34.0f;
+
+static const float kScrollButtonSize = 36.0f;
+static const float kScrollButtonMargin = 8.0f;
+
+struct SidebarPlace
+{
+  const char *name;
+  const char *path;
+};
+
+static const SidebarPlace g_places[] =
+{
+  {"Home", "/storage/emulated/0/"},
+  {"Root", "/"},
+  {"Documents", "/storage/emulated/0/Documents/"},
+  {"Downloads", "/storage/emulated/0/Download/"},
+  {"Pictures", "/storage/emulated/0/Pictures/"},
+  {"Videos", "/storage/emulated/0/Movies/"},
+};
+
+static const int g_placeCount =
+  static_cast<int>(sizeof(g_places) / sizeof(g_places[0]));
 
 static NVGcolor rgb(
   unsigned char r,
@@ -272,15 +307,6 @@ static void shutdownEgl()
   g_app.context = EGL_NO_CONTEXT;
 }
 
-static void buttonHandler(
-  UIcontext *,
-  int,
-  UIevent event)
-{
-  if (event == UI_BUTTON0_HOT_UP)
-    g_app.clicked = !g_app.clicked;
-}
-
 struct EntryItemData
 {
   int entryIndex;
@@ -342,9 +368,40 @@ static bool readDirectory(const std::string &path)
       continue;
     }
 
+    if (strncmp(pName, "vendor_", 7) == 0 ||
+        strncmp(pName, "plat_", 5) == 0 ||
+        strncmp(pName, "init", 4) == 0)
+    {
+      continue;
+    }
+
+    std::string childPath = path;
+
+    if (childPath.empty() || childPath.back() != '/')
+      childPath += '/';
+
+    childPath += pName;
+
+    struct stat st;
+
+    if (stat(childPath.c_str(), &st) != 0)
+      continue;
+
+    const bool isDir = S_ISDIR(st.st_mode);
+
+    if (isDir)
+    {
+      DIR *pChild = opendir(childPath.c_str());
+
+      if (!pChild)
+        continue;
+
+      closedir(pChild);
+    }
+
     FileEntry entry;
     entry.name = pName;
-    entry.isDirectory = (pEntry->d_type == DT_DIR);
+    entry.isDirectory = isDir;
 
     g_app.entries.push_back(entry);
   }
@@ -356,9 +413,11 @@ static bool readDirectory(const std::string &path)
 
 static void buildUi()
 {
-  const int toolbarHeight = 36;
-  const int statusHeight = 22;
-  const int sidebarWidth = 140;
+  const int toolbarHeight = static_cast<int>(kToolbarHeight);
+  const int statusHeight = static_cast<int>(kStatusBarHeight);
+  const int sidebarWidth = static_cast<int>(kSidebarWidth);
+  const int topInset = static_cast<int>(kTopInset);
+  const int bottomNav = static_cast<int>(kBottomNavHeight);
 
   uiBeginLayout(g_app.ui);
 
@@ -385,6 +444,14 @@ static void buildUi()
     g_app.ui,
     column,
     UI_HFILL | UI_VFILL);
+
+  uiSetMargins(
+    g_app.ui,
+    column,
+    0,
+    topInset,
+    0,
+    0);
 
   {
     const int topSpacer = uiItem(g_app.ui);
@@ -416,11 +483,14 @@ static void buildUi()
       item,
       UI_HFILL);
 
+    const int topMargin =
+      (i == 0) ? -static_cast<int>(g_app.scrollOffset) : 0;
+
     uiSetMargins(
       g_app.ui,
       item,
       sidebarWidth,
-      0,
+      topMargin,
       0,
       0);
 
@@ -437,7 +507,7 @@ static void buildUi()
       g_app.ui,
       bottomSpacer,
       0,
-      statusHeight);
+      statusHeight + bottomNav);
 
     uiSetLayout(
       g_app.ui,
@@ -579,7 +649,7 @@ static void draw()
     0.0f,
     0.0f,
     screenWidth,
-    toolbarHeight);
+    kTopInset + toolbarHeight);
   nvgFillColor(g_app.vg, rgb(37, 37, 37));
   nvgFill(g_app.vg);
 
@@ -587,19 +657,22 @@ static void draw()
   nvgRect(
     g_app.vg,
     0.0f,
-    toolbarHeight - 1.0f,
+    kTopInset + toolbarHeight - 1.0f,
     screenWidth,
     1.0f);
   nvgFillColor(g_app.vg, rgb(20, 20, 20));
   nvgFill(g_app.vg);
 
-  const float sidebarHeight = screenHeight - toolbarHeight - statusHeight;
+  const float listTop = kTopInset + toolbarHeight;
+  const float listBottom =
+    screenHeight - statusHeight - kBottomNavHeight;
+  const float sidebarHeight = listBottom - listTop;
 
   nvgBeginPath(g_app.vg);
   nvgRect(
     g_app.vg,
     0.0f,
-    toolbarHeight,
+    listTop,
     sidebarWidth,
     sidebarHeight);
   nvgFillColor(g_app.vg, rgb(33, 33, 33));
@@ -609,7 +682,7 @@ static void draw()
   nvgRect(
     g_app.vg,
     sidebarWidth - 1.0f,
-    toolbarHeight,
+    listTop,
     1.0f,
     sidebarHeight);
   nvgFillColor(g_app.vg, rgb(20, 20, 20));
@@ -622,48 +695,100 @@ static void draw()
   nvgText(
     g_app.vg,
     14.0f,
-    toolbarHeight + 14.0f,
+    listTop + 14.0f,
     "PLACES",
     nullptr);
-
-  const char *places[] =
-  {
-    "Home",
-    "Root",
-    "Documents",
-    "Downloads",
-    "Pictures",
-    "Videos",
-  };
 
   nvgFontSize(g_app.vg, 13.0f);
   nvgFillColor(g_app.vg, rgb(190, 190, 190));
 
-  for (size_t i = 0; i < sizeof(places) / sizeof(places[0]); i++)
+  for (int i = 0; i < g_placeCount; i++)
   {
-    const float y = toolbarHeight + 32.0f +
+    const float y = listTop + 32.0f +
       static_cast<float>(i) * 22.0f;
 
     nvgText(
       g_app.vg,
       24.0f,
       y,
-      places[i],
+      g_places[i].name,
       nullptr);
   }
 
   nvgFontSize(g_app.vg, 14.0f);
+  nvgFontFace(g_app.vg, "default");
   nvgFillColor(g_app.vg, rgb(210, 210, 210));
+  nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
   nvgText(
     g_app.vg,
     14.0f,
-    toolbarHeight * 0.5f,
+    kTopInset + toolbarHeight * 0.5f,
     g_app.currentPath.c_str(),
     nullptr);
 
+  nvgSave(g_app.vg);
+  nvgScissor(
+    g_app.vg,
+    sidebarWidth,
+    listTop,
+    screenWidth - sidebarWidth,
+    sidebarHeight);
   drawItem(0);
+  nvgRestore(g_app.vg);
 
+  const float bottomNavY =
+    screenHeight - statusHeight - kBottomNavHeight;
   const float statusY = screenHeight - statusHeight;
+
+  nvgBeginPath(g_app.vg);
+  nvgRect(
+    g_app.vg,
+    0.0f,
+    bottomNavY,
+    screenWidth,
+    kBottomNavHeight);
+  nvgFillColor(g_app.vg, rgb(37, 37, 37));
+  nvgFill(g_app.vg);
+
+  nvgBeginPath(g_app.vg);
+  nvgRect(
+    g_app.vg,
+    0.0f,
+    bottomNavY,
+    screenWidth,
+    1.0f);
+  nvgFillColor(g_app.vg, rgb(20, 20, 20));
+  nvgFill(g_app.vg);
+
+  const bool canGoBack =
+    g_app.currentPath != "/" &&
+    !g_app.currentPath.empty();
+
+  nvgBeginPath(g_app.vg);
+  nvgRoundedRect(
+    g_app.vg,
+    kBackButtonX,
+    bottomNavY + (kBottomNavHeight - kBackButtonH) * 0.5f,
+    kBackButtonW,
+    kBackButtonH,
+    6.0f);
+  nvgFillColor(
+    g_app.vg,
+    canGoBack ? rgb(60, 90, 130) : rgb(50, 50, 50));
+  nvgFill(g_app.vg);
+
+  nvgFontSize(g_app.vg, 14.0f);
+  nvgFontFace(g_app.vg, "default");
+  nvgFillColor(
+    g_app.vg,
+    canGoBack ? rgb(230, 230, 230) : rgb(120, 120, 120));
+  nvgTextAlign(g_app.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+  nvgText(
+    g_app.vg,
+    kBackButtonX + kBackButtonW * 0.5f,
+    bottomNavY + kBottomNavHeight * 0.5f,
+    "<  Back",
+    nullptr);
 
   nvgBeginPath(g_app.vg);
   nvgRect(
@@ -672,17 +797,7 @@ static void draw()
     statusY,
     screenWidth,
     statusHeight);
-  nvgFillColor(g_app.vg, rgb(37, 37, 37));
-  nvgFill(g_app.vg);
-
-  nvgBeginPath(g_app.vg);
-  nvgRect(
-    g_app.vg,
-    0.0f,
-    statusY,
-    screenWidth,
-    1.0f);
-  nvgFillColor(g_app.vg, rgb(20, 20, 20));
+  nvgFillColor(g_app.vg, rgb(28, 28, 28));
   nvgFill(g_app.vg);
 
   const std::string statusText =
@@ -690,6 +805,7 @@ static void draw()
 
   nvgFontSize(g_app.vg, 11.0f);
   nvgFillColor(g_app.vg, rgb(140, 140, 140));
+  nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
   nvgText(
     g_app.vg,
     12.0f,
@@ -697,11 +813,245 @@ static void draw()
     statusText.c_str(),
     nullptr);
 
+  const float contentHeight =
+    static_cast<float>(g_app.entries.size()) *
+    static_cast<float>(BND_WIDGET_HEIGHT);
+
+  if (contentHeight > sidebarHeight)
+  {
+    const float sbx =
+      screenWidth - kScrollButtonSize - kScrollButtonMargin;
+
+    const float sbyUp =
+      listBottom - kScrollButtonSize * 2.0f - 12.0f;
+
+    const float sbyDown =
+      listBottom - kScrollButtonSize - 6.0f;
+
+    nvgBeginPath(g_app.vg);
+    nvgRoundedRect(
+      g_app.vg,
+      sbx,
+      sbyUp,
+      kScrollButtonSize,
+      kScrollButtonSize,
+      6.0f);
+    nvgFillColor(g_app.vg, rgb(55, 55, 55));
+    nvgFill(g_app.vg);
+
+    nvgBeginPath(g_app.vg);
+    nvgRoundedRect(
+      g_app.vg,
+      sbx,
+      sbyDown,
+      kScrollButtonSize,
+      kScrollButtonSize,
+      6.0f);
+    nvgFill(g_app.vg);
+
+    nvgFontSize(g_app.vg, 18.0f);
+    nvgFillColor(g_app.vg, rgb(220, 220, 220));
+    nvgTextAlign(g_app.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+    nvgText(
+      g_app.vg,
+      sbx + kScrollButtonSize * 0.5f,
+      sbyUp + kScrollButtonSize * 0.5f,
+      "^",
+      nullptr);
+    nvgText(
+      g_app.vg,
+      sbx + kScrollButtonSize * 0.5f,
+      sbyDown + kScrollButtonSize * 0.5f,
+      "v",
+      nullptr);
+    nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+  }
+
   nvgEndFrame(g_app.vg);
 
   eglSwapBuffers(
     g_app.display,
     g_app.surface);
+}
+
+static bool isOnSidebar(
+  float x,
+  float y)
+{
+  const float listTop = kTopInset + kToolbarHeight;
+  const float itemHeight = 22.0f;
+  const float startY = listTop + 32.0f;
+
+  if (x < 0.0f || x > kSidebarWidth)
+    return false;
+
+  if (y < startY - itemHeight * 0.5f)
+    return false;
+
+  if (y > startY + static_cast<float>(g_placeCount) * itemHeight)
+    return false;
+
+  return true;
+}
+
+static void handleSidebarClick(float y)
+{
+  const float listTop = kTopInset + kToolbarHeight;
+  const float itemHeight = 22.0f;
+  const float startY = listTop + 32.0f;
+
+  const int idx = static_cast<int>(
+    (y - startY) / itemHeight + 0.5f);
+
+  if (idx < 0 || idx >= g_placeCount)
+    return;
+
+  g_app.pendingNavigate = g_places[idx].path;
+}
+
+static void buttonHandler(
+  UIcontext *,
+  int item,
+  UIevent event)
+{
+  if (event != UI_BUTTON0_HOT_UP)
+    return;
+
+  void *pHandle = uiGetHandle(g_app.ui, item);
+
+  if (!pHandle)
+    return;
+
+  EntryItemData *pData = static_cast<EntryItemData *>(pHandle);
+
+  const FileEntry &entry = g_app.entries[pData->entryIndex];
+
+  if (!entry.isDirectory)
+    return;
+
+  std::string newPath = g_app.currentPath;
+
+  if (newPath.empty() || newPath.back() != '/')
+    newPath += '/';
+
+  newPath += entry.name;
+  newPath += '/';
+
+  g_app.pendingNavigate = newPath;
+}
+
+static bool isOnBackButton(float x, float y)
+{
+  const float bottomNavY =
+    static_cast<float>(g_app.height) - kStatusBarHeight - kBottomNavHeight;
+
+  const float buttonY =
+    bottomNavY + (kBottomNavHeight - kBackButtonH) * 0.5f;
+
+  return x >= kBackButtonX &&
+         x <= kBackButtonX + kBackButtonW &&
+         y >= buttonY &&
+         y <= buttonY + kBackButtonH;
+}
+
+static bool isOnScrollUp(float x, float y)
+{
+  const float bx =
+    static_cast<float>(g_app.width) - kScrollButtonSize - kScrollButtonMargin;
+
+  const float listBottom =
+    static_cast<float>(g_app.height) - kStatusBarHeight - kBottomNavHeight;
+
+  const float by = listBottom - kScrollButtonSize * 2.0f - 12.0f;
+
+  return x >= bx &&
+         x <= bx + kScrollButtonSize &&
+         y >= by &&
+         y <= by + kScrollButtonSize;
+}
+
+static bool isOnScrollDown(float x, float y)
+{
+  const float bx =
+    static_cast<float>(g_app.width) - kScrollButtonSize - kScrollButtonMargin;
+
+  const float listBottom =
+    static_cast<float>(g_app.height) - kStatusBarHeight - kBottomNavHeight;
+
+  const float by = listBottom - kScrollButtonSize - 6.0f;
+
+  return x >= bx &&
+         x <= bx + kScrollButtonSize &&
+         y >= by &&
+         y <= by + kScrollButtonSize;
+}
+
+static bool isInListArea(float x, float y)
+{
+  const float listTop = kTopInset + kToolbarHeight;
+  const float listBottom =
+    static_cast<float>(g_app.height) - kStatusBarHeight - kBottomNavHeight;
+
+  return x >= kSidebarWidth &&
+         y >= listTop &&
+         y <= listBottom;
+}
+
+static void handleBackClick()
+{
+  if (g_app.currentPath.empty() || g_app.currentPath == "/")
+    return;
+
+  std::string parent = g_app.currentPath;
+
+  if (parent.back() == '/')
+    parent.pop_back();
+
+  const size_t slash = parent.find_last_of('/');
+
+  if (slash == std::string::npos || slash == 0)
+  {
+    parent = "/";
+  }
+  else
+  {
+    parent = parent.substr(0, slash + 1);
+  }
+
+  g_app.pendingNavigate = parent;
+}
+
+static void handleScroll(int direction)
+{
+  const float contentHeight =
+    static_cast<float>(g_app.entries.size()) *
+    static_cast<float>(BND_WIDGET_HEIGHT);
+
+  const float visibleHeight =
+    static_cast<float>(g_app.height) -
+    kTopInset - kToolbarHeight - kStatusBarHeight - kBottomNavHeight;
+
+  float maxScroll = contentHeight - visibleHeight;
+
+  if (maxScroll < 0.0f)
+    maxScroll = 0.0f;
+
+  const float step = static_cast<float>(BND_WIDGET_HEIGHT) * 3.0f;
+
+  float newOffset =
+    g_app.scrollOffset + static_cast<float>(direction) * step;
+
+  if (newOffset < 0.0f)
+    newOffset = 0.0f;
+
+  if (newOffset > maxScroll)
+    newOffset = maxScroll;
+
+  if (newOffset != g_app.scrollOffset)
+  {
+    g_app.scrollOffset = newOffset;
+    buildUi();
+  }
 }
 
 static int32_t handleInput(
@@ -742,6 +1092,9 @@ static int32_t handleInput(
   if (actionType ==
       AMOTION_EVENT_ACTION_DOWN)
   {
+    if (!isInListArea(x, y))
+      return 1;
+
     uiSetButton(
       g_app.ui,
       0,
@@ -754,6 +1107,33 @@ static int32_t handleInput(
   if (actionType ==
       AMOTION_EVENT_ACTION_UP)
   {
+    if (isOnSidebar(x, y))
+    {
+      handleSidebarClick(y);
+      return 1;
+    }
+
+    if (isOnBackButton(x, y))
+    {
+      handleBackClick();
+      return 1;
+    }
+
+    if (isOnScrollUp(x, y))
+    {
+      handleScroll(-1);
+      return 1;
+    }
+
+    if (isOnScrollDown(x, y))
+    {
+      handleScroll(1);
+      return 1;
+    }
+
+    if (!isInListArea(x, y))
+      return 1;
+
     uiSetButton(
       g_app.ui,
       0,
@@ -882,6 +1262,19 @@ void android_main(
         g_app.ui,
         static_cast<int>(
           getTimeMilliseconds()));
+
+      if (!g_app.pendingNavigate.empty())
+      {
+        if (readDirectory(g_app.pendingNavigate))
+        {
+          g_app.currentPath = g_app.pendingNavigate;
+          g_app.scrollOffset = 0.0f;
+
+          buildUi();
+        }
+
+        g_app.pendingNavigate.clear();
+      }
     }
 
     draw();

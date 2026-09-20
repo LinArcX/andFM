@@ -38,7 +38,8 @@
 menu () {
   commands=(
     # main
-    "build(debug)" "create patch" "qemu(android x86-64)" "adb connect" "adb install" "adb uninstall" "adb run" "adb log" "adb close apk"
+    "build(debug)" "create patch" "qemu(android x86-64)" "adb connect" "adb install"
+    "adb uninstall" "adb run" "adb log" "adb close apk"
     "adb reboot android OS" "adb poweroff android OS"
 
     # debug
@@ -153,6 +154,10 @@ menu () {
       adb connect "$selected"
       ;;
     "adb install")
+      # unisntall old app first
+      echo "--> Uninstalling old app first"
+      adb -s 127.0.0.1:5555 uninstall org.linarcx.andFM
+
       # adb -s 127.0.0.1:5555 install -r "/mnt/D/workspace/c++/active/andFM/build/andFM.apk"
       PROJECT_DIR="/mnt/D/workspace/c++/active/andFM"
       DEBUG_DIR="$PROJECT_DIR/build/debug"
@@ -184,10 +189,13 @@ menu () {
         exit 0
       fi
       
-      echo "Installing:"
+      echo "--> Installing:"
       echo "  $APK"
       
       adb -s 127.0.0.1:5555 install -r "$APK"
+
+      echo "--> Running andFM..."
+      adb -s 127.0.0.1:5555 shell am start -n org.linarcx.andFM/android.app.NativeActivity
       ;;
     "adb uninstall")
       adb -s 127.0.0.1:5555 uninstall org.linarcx.andFM

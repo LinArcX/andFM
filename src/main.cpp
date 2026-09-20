@@ -54,6 +54,9 @@ struct App
 
   bool searchActive = false;
   std::string searchQuery;
+  int searchCaretPos = 0;
+
+  bool sidebarCollapsed = false;
 
   int pressedKeyboardRow = -1;
   int pressedKeyboardCol = -1;
@@ -101,6 +104,9 @@ static const float kKeyboardKeyHeight = 108.0f;
 static const float kKeyboardKeyGap = 10.0f;
 static const float kKeyboardPadding = 12.0f;
 static const float kKeyboardBottomInset = 150.0f;
+
+static const float kSidebarToggleSize = 72.0f;
+static const float kSidebarToggleMargin = 30.0f;
 
 static const char *g_keyboardRows[] =
 {
@@ -161,6 +167,68 @@ static float getKeyboardTop()
   return static_cast<float>(g_app.height) -
     keyboardHeight -
     kKeyboardBottomInset;
+}
+
+static float getSidebarWidth()
+{
+  return g_app.sidebarCollapsed ? 0.0f : kSidebarWidth;
+}
+
+static float getSearchTextWidth(const std::string &text)
+{
+  if (text.empty())
+    return 0.0f;
+
+  if (!g_app.vg)
+    return 0.0f;
+
+  nvgFontSize(g_app.vg, 40.0f);
+  nvgFontFace(g_app.vg, "default");
+
+  float bounds[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+
+  nvgTextBounds(
+    g_app.vg,
+    0.0f,
+    0.0f,
+    text.c_str(),
+    nullptr,
+    bounds);
+
+  return bounds[2] - bounds[0];
+}
+
+static int getCaretFromX(float x, float textStartX)
+{
+  int best = 0;
+  float bestDist = 1.0e9f;
+
+  for (size_t i = 0; i <= g_app.searchQuery.size(); i++)
+  {
+    const std::string prefix = g_app.searchQuery.substr(0, i);
+    const float posX = textStartX + getSearchTextWidth(prefix);
+    const float d = (posX > x) ? (posX - x) : (x - posX);
+
+    if (d < bestDist)
+    {
+      bestDist = d;
+      best = static_cast<int>(i);
+    }
+  }
+
+  return best;
+}
+
+static bool isOnSidebarToggle(float x, float y)
+{
+  const float btnX = kSidebarToggleMargin;
+  const float btnY =
+    kTopInset + kToolbarHeight * 0.5f - kSidebarToggleSize * 0.5f;
+
+  return x >= btnX &&
+         x <= btnX + kSidebarToggleSize &&
+         y >= btnY &&
+         y <= btnY + kSidebarToggleSize;
 }
 
 static void drawFolderIcon(
@@ -781,7 +849,7 @@ static void buildUi()
 {
   const int toolbarHeight = static_cast<int>(kToolbarHeight);
   const int statusHeight = static_cast<int>(kStatusBarHeight);
-  const int sidebarWidth = static_cast<int>(kSidebarWidth);
+  const int sidebarWidth = static_cast<int>(getSidebarWidth());
   const int topInset = static_cast<int>(kTopInset);
   const int bottomNav = static_cast<int>(kBottomNavHeight);
 
@@ -991,6 +1059,7 @@ static void applyKeyboardKey(
   {
     g_app.searchActive = false;
     g_app.searchQuery.clear();
+    g_app.searchCaretPos = 0;
     rebuildFilter();
     buildUi();
     return;
@@ -998,7 +1067,10 @@ static void applyKeyboardKey(
 
   if (action == 1)
   {
-    g_app.searchQuery += ' ';
+    g_app.searchQuery.insert(
+      static_cast<size_t>(g_app.searchCaretPos), 1, ' ');
+
+    g_app.searchCaretPos += 1;
     rebuildFilter();
     buildUi();
     return;
@@ -1006,9 +1078,12 @@ static void applyKeyboardKey(
 
   if (action == 2)
   {
-    if (!g_app.searchQuery.empty())
+    if (g_app.searchCaretPos > 0 && !g_app.searchQuery.empty())
     {
-      g_app.searchQuery.pop_back();
+      g_app.searchQuery.erase(
+        static_cast<size_t>(g_app.searchCaretPos - 1), 1);
+
+      g_app.searchCaretPos -= 1;
       rebuildFilter();
       buildUi();
     }
@@ -1025,7 +1100,10 @@ static void applyKeyboardKey(
   if (col >= n)
     return;
 
-  g_app.searchQuery += pRow[col];
+  g_app.searchQuery.insert(
+    static_cast<size_t>(g_app.searchCaretPos), 1, pRow[col]);
+
+  g_app.searchCaretPos += 1;
   rebuildFilter();
   buildUi();
 }
@@ -1301,7 +1379,7 @@ static void draw()
 
   const float toolbarHeight = 108.0f;
   const float statusHeight = 66.0f;
-  const float sidebarWidth = 420.0f;
+  const float sidebarWidth = getSidebarWidth();
   const float screenWidth = static_cast<float>(g_app.width);
   const float screenHeight = static_cast<float>(g_app.height);
 
@@ -1330,67 +1408,108 @@ static void draw()
     screenHeight - statusHeight - kBottomNavHeight;
   const float sidebarHeight = listBottom - listTop;
 
-  nvgBeginPath(g_app.vg);
-  nvgRect(
-    g_app.vg,
-    0.0f,
-    listTop,
-    sidebarWidth,
-    sidebarHeight);
-  nvgFillColor(g_app.vg, rgb(33, 33, 33));
-  nvgFill(g_app.vg);
-
-  nvgBeginPath(g_app.vg);
-  nvgRect(
-    g_app.vg,
-    sidebarWidth - 1.0f,
-    listTop,
-    1.0f,
-    sidebarHeight);
-  nvgFillColor(g_app.vg, rgb(20, 20, 20));
-  nvgFill(g_app.vg);
-
-  nvgFontSize(g_app.vg, 33.0f);
-  nvgFontFace(g_app.vg, "default");
-  nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-  nvgFillColor(g_app.vg, rgb(120, 120, 120));
-  nvgText(
-    g_app.vg,
-    42.0f,
-    listTop + 42.0f,
-    "PLACES",
-    nullptr);
-
-  nvgFontSize(g_app.vg, 39.0f);
-  nvgFontFace(g_app.vg, "default");
-  nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-
-  for (int i = 0; i < g_placeCount; i++)
+  if (!g_app.sidebarCollapsed)
   {
-    const float y = listTop + 96.0f +
-      static_cast<float>(i) * kSidebarItemHeight;
+    nvgBeginPath(g_app.vg);
+    nvgRect(
+      g_app.vg,
+      0.0f,
+      listTop,
+      sidebarWidth,
+      sidebarHeight);
+    nvgFillColor(g_app.vg, rgb(33, 33, 33));
+    nvgFill(g_app.vg);
 
-    const float iconSize = 54.0f;
+    nvgBeginPath(g_app.vg);
+    nvgRect(
+      g_app.vg,
+      sidebarWidth - 1.0f,
+      listTop,
+      1.0f,
+      sidebarHeight);
+    nvgFillColor(g_app.vg, rgb(20, 20, 20));
+    nvgFill(g_app.vg);
 
-    drawPlaceIcon(
-      i,
-      42.0f,
-      y - iconSize * 0.5f,
-      iconSize);
-
-    nvgFillColor(g_app.vg, rgb(190, 190, 190));
+    nvgFontSize(g_app.vg, 33.0f);
+    nvgFontFace(g_app.vg, "default");
+    nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+    nvgFillColor(g_app.vg, rgb(120, 120, 120));
     nvgText(
       g_app.vg,
-      126.0f,
-      y,
-      g_places[i].name,
+      42.0f,
+      listTop + 42.0f,
+      "PLACES",
       nullptr);
+
+    nvgFontSize(g_app.vg, 39.0f);
+    nvgFontFace(g_app.vg, "default");
+    nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+
+    for (int i = 0; i < g_placeCount; i++)
+    {
+      const float y = listTop + 96.0f +
+        static_cast<float>(i) * kSidebarItemHeight;
+
+      const float iconSize = 54.0f;
+
+      drawPlaceIcon(
+        i,
+        42.0f,
+        y - iconSize * 0.5f,
+        iconSize);
+
+      nvgFillColor(g_app.vg, rgb(190, 190, 190));
+      nvgText(
+        g_app.vg,
+        126.0f,
+        y,
+        g_places[i].name,
+        nullptr);
+    }
   }
 
   const float toolbarCenterY = kTopInset + toolbarHeight * 0.5f;
+
+  {
+    const float btnX = kSidebarToggleMargin;
+    const float btnY = toolbarCenterY - kSidebarToggleSize * 0.5f;
+
+    nvgBeginPath(g_app.vg);
+    nvgRoundedRect(
+      g_app.vg,
+      btnX,
+      btnY,
+      kSidebarToggleSize,
+      kSidebarToggleSize,
+      6.0f);
+    nvgFillColor(g_app.vg, rgb(55, 55, 55));
+    nvgFill(g_app.vg);
+
+    const float lineX1 = btnX + kSidebarToggleSize * 0.22f;
+    const float lineX2 = btnX + kSidebarToggleSize * 0.78f;
+    const float lineH = 6.0f;
+
+    for (int i = 0; i < 3; i++)
+    {
+      const float ly =
+        btnY + kSidebarToggleSize * 0.32f +
+        static_cast<float>(i) * kSidebarToggleSize * 0.18f;
+
+      nvgBeginPath(g_app.vg);
+      nvgRoundedRect(
+        g_app.vg,
+        lineX1,
+        ly - lineH * 0.5f,
+        lineX2 - lineX1,
+        lineH,
+        lineH * 0.5f);
+      nvgFillColor(g_app.vg, rgb(220, 220, 220));
+      nvgFill(g_app.vg);
+    }
+  }
   {
     g_app.breadcrumbs.clear();
-    float bx = 30.0f;
+    float bx = kSidebarToggleMargin + kSidebarToggleSize + 20.0f;
     const float maxX =
       screenWidth - kSearchButtonSize - kSearchButtonMargin - 30.0f;
     const float itemHeight = 72.0f;
@@ -1715,6 +1834,36 @@ static void draw()
       displayQuery.c_str(),
       nullptr);
 
+    if (!g_app.searchQuery.empty())
+    {
+      const std::string caretPrefix =
+        g_app.searchQuery.substr(
+          0,
+          static_cast<size_t>(g_app.searchCaretPos));
+
+      const float caretX =
+        36.0f + getSearchTextWidth(caretPrefix);
+
+      const long long now = getTimeMilliseconds();
+      const bool caretVisible = ((now / 500) % 2) == 0;
+
+      if (caretVisible)
+      {
+        nvgBeginPath(g_app.vg);
+        nvgMoveTo(
+          g_app.vg,
+          caretX,
+          kTopInset + 24.0f);
+        nvgLineTo(
+          g_app.vg,
+          caretX,
+          kTopInset + toolbarHeight - 24.0f);
+        nvgStrokeColor(g_app.vg, rgb(230, 230, 230));
+        nvgStrokeWidth(g_app.vg, 3.0f);
+        nvgStroke(g_app.vg);
+      }
+    }
+
     const float keyboardTop = getKeyboardTop();
     const float keyboardHeight = screenHeight - keyboardTop;
 
@@ -1911,7 +2060,7 @@ static bool isOnSidebar(
   const float itemHeight = kSidebarItemHeight;
   const float startY = listTop + 32.0f;
 
-  if (x < 0.0f || x > kSidebarWidth)
+  if (x < 0.0f || x > getSidebarWidth())
     return false;
 
   if (y < startY - itemHeight * 0.5f)
@@ -2007,7 +2156,7 @@ static bool isInListArea(float x, float y)
   const float listBottom =
     static_cast<float>(g_app.height) - kStatusBarHeight - kBottomNavHeight;
 
-  return x >= kSidebarWidth &&
+  return x >= getSidebarWidth() &&
          y >= listTop &&
          y <= listBottom;
 }
@@ -2179,6 +2328,12 @@ static int32_t handleInput(
       return 1;
     }
 
+    if (isOnSidebarToggle(x, y))
+    {
+      g_app.touchInList = false;
+      return 1;
+    }
+
     if (!isInListArea(x, y))
     {
       g_app.touchInList = false;
@@ -2255,6 +2410,7 @@ static int32_t handleInput(
       if (!g_app.searchActive)
       {
         g_app.searchQuery.clear();
+        g_app.searchCaretPos = 0;
         g_app.pressedKeyboardRow = -1;
         g_app.pressedKeyboardCol = -1;
         g_app.pressedKeyboardAction = -1;
@@ -2287,6 +2443,23 @@ static int32_t handleInput(
       g_app.pressedKeyboardCol = -1;
       g_app.pressedKeyboardAction = -1;
 
+      return 1;
+    }
+
+    if (g_app.searchActive &&
+        y >= kTopInset &&
+        y <= kTopInset + kToolbarHeight &&
+        x < static_cast<float>(g_app.width) -
+              kSearchButtonSize - kSearchButtonMargin)
+    {
+      g_app.searchCaretPos = getCaretFromX(x, 36.0f);
+      return 1;
+    }
+
+    if (isOnSidebarToggle(x, y))
+    {
+      g_app.sidebarCollapsed = !g_app.sidebarCollapsed;
+      buildUi();
       return 1;
     }
 

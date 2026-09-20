@@ -87,6 +87,7 @@ static const float kSearchButtonMargin = 30.0f;
 static const float kKeyboardKeyHeight = 108.0f;
 static const float kKeyboardKeyGap = 10.0f;
 static const float kKeyboardPadding = 12.0f;
+static const float kKeyboardBottomInset = 150.0f;
 
 static const char *g_keyboardRows[] =
 {
@@ -137,7 +138,9 @@ static float getKeyboardTop()
       (kKeyboardKeyHeight + kKeyboardKeyGap) +
     kKeyboardKeyHeight;
 
-  return static_cast<float>(g_app.height) - keyboardHeight;
+  return static_cast<float>(g_app.height) -
+    keyboardHeight -
+    kKeyboardBottomInset;
 }
 
 static void drawFolderIcon(

@@ -66,16 +66,16 @@ struct App
 
 static App g_app;
 
-static const float kTopInset = 50.0f;
-static const float kToolbarHeight = 36.0f;
-static const float kSidebarWidth = 140.0f;
-static const float kBottomNavHeight = 70.0f;
-static const float kStatusBarHeight = 22.0f;
-static const float kRowHeight = 56.0f;
-static const float kSidebarItemHeight = 44.0f;
+static const float kTopInset = 150.0f;
+static const float kToolbarHeight = 108.0f;
+static const float kSidebarWidth = 420.0f;
+static const float kBottomNavHeight = 210.0f;
+static const float kStatusBarHeight = 66.0f;
+static const float kRowHeight = 168.0f;
+static const float kSidebarItemHeight = 132.0f;
 
-static const float kScrollButtonSize = 36.0f;
-static const float kScrollButtonMargin = 8.0f;
+static const float kScrollButtonSize = 108.0f;
+static const float kScrollButtonMargin = 24.0f;
 
 struct SidebarPlace
 {
@@ -830,8 +830,8 @@ static void drawItem(
       nvgFill(g_app.vg);
     }
 
-    const float iconSize = 24.0f;
-    const float iconX = rect.x + 10.0f;
+    const float iconSize = 72.0f;
+    const float iconX = rect.x + 30.0f;
     const float iconY = rect.y + (rect.h - iconSize) * 0.5f;
 
     if (entry.isDirectory)
@@ -843,13 +843,13 @@ static void drawItem(
       drawFileIcon(iconX, iconY, iconSize);
     }
 
-    nvgFontSize(g_app.vg, 14.0f);
+    nvgFontSize(g_app.vg, 42.0f);
     nvgFontFace(g_app.vg, "default");
     nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
     nvgFillColor(g_app.vg, rgb(210, 210, 210));
     nvgText(
       g_app.vg,
-      iconX + iconSize + 10.0f,
+      iconX + iconSize + 30.0f,
       rect.y + rect.h * 0.5f,
       entry.name.c_str(),
       nullptr);
@@ -905,9 +905,9 @@ static void draw()
     static_cast<float>(g_app.height),
     1.0f);
 
-  const float toolbarHeight = 36.0f;
-  const float statusHeight = 22.0f;
-  const float sidebarWidth = 140.0f;
+  const float toolbarHeight = 108.0f;
+  const float statusHeight = 66.0f;
+  const float sidebarWidth = 420.0f;
   const float screenWidth = static_cast<float>(g_app.width);
   const float screenHeight = static_cast<float>(g_app.height);
 
@@ -956,38 +956,38 @@ static void draw()
   nvgFillColor(g_app.vg, rgb(20, 20, 20));
   nvgFill(g_app.vg);
 
-  nvgFontSize(g_app.vg, 11.0f);
+  nvgFontSize(g_app.vg, 33.0f);
   nvgFontFace(g_app.vg, "default");
   nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
   nvgFillColor(g_app.vg, rgb(120, 120, 120));
   nvgText(
     g_app.vg,
-    14.0f,
-    listTop + 14.0f,
+    42.0f,
+    listTop + 42.0f,
     "PLACES",
     nullptr);
 
-  nvgFontSize(g_app.vg, 13.0f);
+  nvgFontSize(g_app.vg, 39.0f);
   nvgFontFace(g_app.vg, "default");
   nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
 
   for (int i = 0; i < g_placeCount; i++)
   {
-    const float y = listTop + 32.0f +
+    const float y = listTop + 96.0f +
       static_cast<float>(i) * kSidebarItemHeight;
 
-    const float iconSize = 18.0f;
+    const float iconSize = 54.0f;
 
     drawPlaceIcon(
       i,
-      14.0f,
+      42.0f,
       y - iconSize * 0.5f,
       iconSize);
 
     nvgFillColor(g_app.vg, rgb(190, 190, 190));
     nvgText(
       g_app.vg,
-      42.0f,
+      126.0f,
       y,
       g_places[i].name,
       nullptr);
@@ -996,9 +996,9 @@ static void draw()
   const float toolbarCenterY = kTopInset + toolbarHeight * 0.5f;
   {
     g_app.breadcrumbs.clear();
-    float bx = 10.0f;
-    const float maxX = screenWidth - 10.0f;
-    const float itemHeight = 24.0f;
+    float bx = 30.0f;
+    const float maxX = screenWidth - 30.0f;
+    const float itemHeight = 72.0f;
     const float itemY = toolbarCenterY - itemHeight * 0.5f;
 
     std::string breadcrumbPath = g_app.currentPath;
@@ -1032,7 +1032,7 @@ static void draw()
     if (!currentSegment.empty())
       segments.push_back(currentSegment);
 
-    nvgFontSize(g_app.vg, 12.0f);
+    nvgFontSize(g_app.vg, 36.0f);
     nvgFontFace(g_app.vg, "default");
     nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
 
@@ -1087,7 +1087,7 @@ static void draw()
 
       g_app.breadcrumbs.push_back({seg, currentPathAccum, bx, itemY, textW, itemHeight});
 
-      bx += textW + 4.0f;
+      bx += textW + 12.0f;
 
       if (!isLast)
       {
@@ -1099,7 +1099,7 @@ static void draw()
           "/",
           nullptr);
 
-        bx += 8.0f;
+        bx += 24.0f;
       }
     }
   }
@@ -1152,12 +1152,12 @@ static void draw()
   const std::string statusText =
     std::to_string(g_app.entries.size()) + " items";
 
-  nvgFontSize(g_app.vg, 11.0f);
+  nvgFontSize(g_app.vg, 33.0f);
   nvgFillColor(g_app.vg, rgb(140, 140, 140));
   nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
   nvgText(
     g_app.vg,
-    12.0f,
+    36.0f,
     statusY + statusHeight * 0.5f,
     statusText.c_str(),
     nullptr);
@@ -1172,10 +1172,10 @@ static void draw()
       screenWidth - kScrollButtonSize - kScrollButtonMargin;
 
     const float sbyUp =
-      listBottom - kScrollButtonSize * 2.0f - 12.0f;
+      listBottom - kScrollButtonSize * 2.0f - 36.0f;
 
     const float sbyDown =
-      listBottom - kScrollButtonSize - 6.0f;
+      listBottom - kScrollButtonSize - 18.0f;
 
     nvgBeginPath(g_app.vg);
     nvgRoundedRect(
@@ -1198,7 +1198,7 @@ static void draw()
       6.0f);
     nvgFill(g_app.vg);
 
-    nvgFontSize(g_app.vg, 18.0f);
+    nvgFontSize(g_app.vg, 54.0f);
     nvgFillColor(g_app.vg, rgb(220, 220, 220));
     nvgTextAlign(g_app.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
     nvgText(
@@ -1297,7 +1297,7 @@ static bool isOnScrollUp(float x, float y)
   const float listBottom =
     static_cast<float>(g_app.height) - kStatusBarHeight - kBottomNavHeight;
 
-  const float by = listBottom - kScrollButtonSize * 2.0f - 12.0f;
+  const float by = listBottom - kScrollButtonSize * 2.0f - 36.0f;
 
   return x >= bx &&
          x <= bx + kScrollButtonSize &&
@@ -1313,7 +1313,7 @@ static bool isOnScrollDown(float x, float y)
   const float listBottom =
     static_cast<float>(g_app.height) - kStatusBarHeight - kBottomNavHeight;
 
-  const float by = listBottom - kScrollButtonSize - 6.0f;
+  const float by = listBottom - kScrollButtonSize - 18.0f;
 
   return x >= bx &&
          x <= bx + kScrollButtonSize &&

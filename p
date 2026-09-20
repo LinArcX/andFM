@@ -277,8 +277,8 @@ menu () {
 
       # need to extract to separate function
       PROJECT_DIR="/mnt/D/workspace/c++/active/andFM"
-      DEBUG_DIR="$PROJECT_DIR/build/debug"
-      RELEASE_DIR="$PROJECT_DIR/build/release"
+      DEBUG_DIR="$PROJECT_DIR/build/arm64_v8a/debug"
+      RELEASE_DIR="$PROJECT_DIR/build/arm64_v8a/release"
  
       APK_LIST=$(
         find "$DEBUG_DIR" "$RELEASE_DIR" \

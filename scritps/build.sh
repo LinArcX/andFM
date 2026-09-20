@@ -9,8 +9,7 @@ API_LEVEL="30"
 ABI="x86_64"
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-BUILD_DIR="$ROOT_DIR/build"
-WORK_DIR="$BUILD_DIR/work"
+BUILD_ROOT="$ROOT_DIR/build"
 
 SRC_DIR="$ROOT_DIR/src"
 THIRD_PARTY="$ROOT_DIR/third_party"
@@ -42,87 +41,285 @@ if [ ! -x "$KEYTOOL" ]; then
   KEYTOOL="$(command -v keytool || true)"
 fi
 
-KEYSTORE="$BUILD_DIR/debug.keystore"
+#
+# Colors
+#
+
+if [ -t 1 ]; then
+  ESC="$(printf '\033')"
+
+  RESET="${ESC}[0m"
+  BOLD="${ESC}[1m"
+  DIM="${ESC}[2m"
+
+  RED="${ESC}[31m"
+  GREEN="${ESC}[32m"
+  YELLOW="${ESC}[33m"
+  BLUE="${ESC}[34m"
+  MAGENTA="${ESC}[35m"
+  CYAN="${ESC}[36m"
+  WHITE="${ESC}[37m"
+else
+  RESET=""
+  BOLD=""
+  DIM=""
+
+  RED=""
+  GREEN=""
+  YELLOW=""
+  BLUE=""
+  MAGENTA=""
+  CYAN=""
+  WHITE=""
+fi
+
+
+#
+# Output helpers
+#
 
 die()
 {
-  echo "Error: $*" >&2
+  printf "%s✗ Error:%s %s\n" "$RED" "$RESET" "$*" >&2
   exit 1
 }
 
-echo "== andFM build =="
-echo "Root:       $ROOT_DIR"
-echo "ABI:        $ABI"
-echo "API:        $API_LEVEL"
-echo "NDK:        $NDK_DIR"
-echo
+info()
+{
+  printf "  %s→%s %s\n" "$CYAN" "$RESET" "$*"
+}
+
+success()
+{
+  printf "  %s✓%s %s\n" "$GREEN" "$RESET" "$*"
+}
+
+warning()
+{
+  printf "  %s!%s %s\n" "$YELLOW" "$RESET" "$*"
+}
+
+section()
+{
+  printf "\n%s%s━━━ %s ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n\n" \
+    "$BOLD" "$BLUE" "$*" "$RESET"
+}
+
+title()
+{
+  printf "\n"
+  printf "%s%s╭──────────────────────────────────────╮%s\n" \
+    "$BOLD" "$MAGENTA" "$RESET"
+  printf "%s%s│             andFM Build              │%s\n" \
+    "$BOLD" "$MAGENTA" "$RESET"
+  printf "%s%s╰──────────────────────────────────────╯%s\n" \
+    "$BOLD" "$MAGENTA" "$RESET"
+  printf "\n"
+}
+
+#
+# Parse arguments
+#
+
+MODE=""
+CLEAN="false"
+
+for ARG in "$@"; do
+  case "$ARG" in
+    --debug)
+      if [ -n "$MODE" ]; then
+        die "choose either --debug or --release"
+      fi
+
+      MODE="debug"
+      ;;
+
+    --release)
+      if [ -n "$MODE" ]; then
+        die "choose either --debug or --release"
+      fi
+
+      MODE="release"
+      ;;
+
+    --clean)
+      CLEAN="true"
+      ;;
+
+    *)
+      printf "%s\n" "Usage:"
+      printf "  %s --debug\n" "$0"
+      printf "  %s --release\n" "$0"
+      printf "  %s --clean --debug\n" "$0"
+      printf "  %s --clean --release\n" "$0"
+      exit 1
+      ;;
+  esac
+done
+
+if [ -z "$MODE" ]; then
+  die "build mode is required (--debug or --release)"
+fi
+
+#
+# Mode-specific paths
+#
+
+BUILD_DIR="$BUILD_ROOT/$MODE"
+WORK_DIR="$BUILD_DIR/work"
+
+if [ "$MODE" = "debug" ]; then
+  KEYSTORE="$BUILD_DIR/debug.keystore"
+  KEY_ALIAS="androiddebugkey"
+
+  OPTIMIZATION_FLAGS="
+    -O0
+    -g
+  "
+
+  PREPROCESSOR_FLAGS=""
+
+  LINKER_FLAGS="
+    -Wl,--gc-sections
+  "
+
+  ANDROID_DEBUGGABLE="true"
+else
+  KEYSTORE="$BUILD_DIR/release.keystore"
+  KEY_ALIAS="androidreleasekey"
+
+  OPTIMIZATION_FLAGS="
+    -O2
+    -g0
+  "
+
+  PREPROCESSOR_FLAGS="
+    -DNDEBUG
+  "
+
+  LINKER_FLAGS="
+    -Wl,--gc-sections
+    -Wl,--strip-debug
+  "
+
+  ANDROID_DEBUGGABLE="false"
+fi
+
+#
+# Clean
+#
+
+if [ "$CLEAN" = "true" ]; then
+  title
+
+  printf "%sMode:%s %s\n" "$DIM" "$RESET" "$MODE"
+  printf "%sPath:%s %s\n\n" "$DIM" "$RESET" "$BUILD_DIR"
+
+  if [ -d "$BUILD_DIR" ]; then
+    rm -rf "$BUILD_DIR"
+    success "Removed $BUILD_DIR"
+  else
+    info "$BUILD_DIR does not exist"
+  fi
+
+  printf "\n%sClean complete.%s\n\n" "$GREEN" "$RESET"
+  exit 0
+fi
+
+title
+
+printf "  %sMode:%s       %s%s%s\n" \
+  "$DIM" "$RESET" "$BOLD" "$MODE" "$RESET"
+
+printf "  %sOutput:%s     %s\n" \
+  "$DIM" "$RESET" "$BUILD_DIR"
+
+printf "  %sABI:%s        %s\n" \
+  "$DIM" "$RESET" "$ABI"
+
+printf "  %sAPI:%s        %s\n" \
+  "$DIM" "$RESET" "$API_LEVEL"
+
+printf "  %sNDK:%s        %s\n" \
+  "$DIM" "$RESET" "$NDK_DIR"
 
 #
 # Validate tools
 #
 
+section "Checking environment"
+
 [ -f "$SDK_PLATFORM" ] ||
   die "Android platform not found: $SDK_PLATFORM"
+success "Android SDK"
 
 [ -x "$CC" ] ||
   die "Clang not found: $CC"
+success "Clang"
 
 [ -x "$CXX" ] ||
   die "Clang++ not found: $CXX"
+success "Clang++"
 
 [ -x "$AAPT" ] ||
   die "aapt not found: $AAPT"
+success "aapt"
 
 [ -x "$ZIPALIGN" ] ||
   die "zipalign not found: $ZIPALIGN"
+success "zipalign"
 
 [ -x "$APKSIGNER" ] ||
   die "apksigner not found: $APKSIGNER"
+success "apksigner"
 
 [ -n "$KEYTOOL" ] ||
   die "keytool not found"
+success "keytool"
 
 #
 # Validate source tree
 #
 
+section "Checking source tree"
+
 [ -f "$SRC_DIR/main.cpp" ] ||
   die "Missing source: $SRC_DIR/main.cpp"
+success "Application source"
 
 [ -f "$THIRD_PARTY/impl.c" ] ||
   die "Missing implementation source: $THIRD_PARTY/impl.c"
+success "Third-party implementation"
 
 [ -f "$RAWDRAW_DIR/android_native_app_glue.c" ] ||
   die "Missing rawdrawandroid glue"
-
-[ -f "$RAWDRAW_DIR/android_native_app_glue.h" ] ||
-  die "Missing rawdrawandroid glue header"
+success "rawdrawandroid"
 
 [ -f "$NANOVG_DIR/nanovg.h" ] ||
   die "Missing NanoVG"
+success "NanoVG"
 
-[ -f "$NANOVG_DIR/nanovg_gl.h" ] ||
-  die "Missing NanoVG GL backend"
+[ -f "$NANOVG_DIR/nanovg.c" ] ||
+  die "Missing NanoVG implementation"
+success "NanoVG implementation"
 
 [ -f "$OUI_DIR/oui.h" ] ||
   die "Missing OUI"
+success "OUI"
 
 [ -f "$OUI_DIR/blendish.h" ] ||
   die "Missing Blendish"
+success "Blendish"
 
 #
-# Clean build
+# Prepare directories
 #
 
-rm -rf "$BUILD_DIR"
+rm -rf "$WORK_DIR"
 
 mkdir -p \
   "$WORK_DIR/lib/$ABI" \
   "$WORK_DIR/assets"
-
-#
-# Copy application font
-#
 
 FONT="$ROOT_DIR/assets/DejaVuSans.ttf"
 
@@ -132,7 +329,7 @@ FONT="$ROOT_DIR/assets/DejaVuSans.ttf"
 cp "$FONT" "$WORK_DIR/assets/DejaVuSans.ttf"
 
 #
-# Common include paths
+# Include paths
 #
 
 INCLUDES="
@@ -145,7 +342,7 @@ INCLUDES="
 "
 
 #
-# Warnings for our C++ application.
+# Warnings
 #
 
 APP_WARNINGS="
@@ -153,14 +350,6 @@ APP_WARNINGS="
   -Wextra
   -Wpedantic
 "
-
-#
-# Warnings for third-party C sources.
-#
-# rawdrawandroid contains intentionally old C constructs and
-# unused callback parameters. Keep those warnings suppressed
-# so the build output remains useful.
-#
 
 THIRD_PARTY_WARNINGS="
   -Wall
@@ -173,7 +362,7 @@ THIRD_PARTY_WARNINGS="
 "
 
 #
-# Common Android compiler flags.
+# Common Android flags
 #
 
 ANDROID_CFLAGS="
@@ -184,13 +373,17 @@ ANDROID_CFLAGS="
 "
 
 #
-# Compile rawdrawandroid glue
+# Compile
 #
 
-echo "Compiling rawdrawandroid glue..."
+section "Compiling"
+
+info "rawdrawandroid"
 
 "$CC" \
   $ANDROID_CFLAGS \
+  $OPTIMIZATION_FLAGS \
+  $PREPROCESSOR_FLAGS \
   $THIRD_PARTY_WARNINGS \
   $INCLUDES \
   -DAPPNAME='"andFM"' \
@@ -198,54 +391,42 @@ echo "Compiling rawdrawandroid glue..."
   "$RAWDRAW_DIR/android_native_app_glue.c" \
   -o "$WORK_DIR/android_native_app_glue.o"
 
-#
-# Compile NanoVG / OUI / Blendish implementations.
-#
-# impl.c contains:
-#
-#   NANOVG_GL2_IMPLEMENTATION
-#   OUI_IMPLEMENTATION
-#   BLENDISH_IMPLEMENTATION
-#
-# Do not define these implementation macros in main.cpp.
-#
+success "rawdrawandroid"
 
-echo "Compiling NanoVG/OUI implementations..."
+info "NanoVG"
 
 "$CC" \
   $ANDROID_CFLAGS \
+  $OPTIMIZATION_FLAGS \
+  $PREPROCESSOR_FLAGS \
   $THIRD_PARTY_WARNINGS \
   $INCLUDES \
   -c \
-  "$ROOT_DIR/third_party/nanovg/nanovg.c" \
+  "$NANOVG_DIR/nanovg.c" \
   -o "$WORK_DIR/nanovg.o"
 
+success "NanoVG"
+
+info "OUI / Blendish"
+
 "$CC" \
   $ANDROID_CFLAGS \
+  $OPTIMIZATION_FLAGS \
+  $PREPROCESSOR_FLAGS \
   $THIRD_PARTY_WARNINGS \
   $INCLUDES \
   -c \
-  "$ROOT_DIR/third_party/impl.c" \
+  "$THIRD_PARTY/impl.c" \
   -o "$WORK_DIR/impl.o"
 
-#echo "Compiling NanoVG/OUI implementations..."
-#
-#"$CC" \
-#  $ANDROID_CFLAGS \
-#  $THIRD_PARTY_WARNINGS \
-#  $INCLUDES \
-#  -c \
-#  "$THIRD_PARTY/impl.c" \
-#  -o "$WORK_DIR/impl.o"
+success "OUI / Blendish"
 
-#
-# Compile application
-#
-
-echo "Compiling application..."
+info "Application"
 
 "$CXX" \
   $ANDROID_CFLAGS \
+  $OPTIMIZATION_FLAGS \
+  $PREPROCESSOR_FLAGS \
   $APP_WARNINGS \
   $INCLUDES \
   -std=c++17 \
@@ -255,17 +436,21 @@ echo "Compiling application..."
   "$SRC_DIR/main.cpp" \
   -o "$WORK_DIR/main.o"
 
+success "Application"
+
 #
-# Link native library
+# Link
 #
 
-echo "Linking..."
+section "Linking"
+
+info "lib$APP_NAME.so"
 
 "$CXX" \
   --target="$TARGET" \
   -shared \
   -static-libstdc++ \
-  -Wl,--gc-sections \
+  $LINKER_FLAGS \
   -Wl,-soname,lib"$APP_NAME".so \
   "$WORK_DIR/main.o" \
   "$WORK_DIR/android_native_app_glue.o" \
@@ -277,48 +462,35 @@ echo "Linking..."
   -lEGL \
   -o "$WORK_DIR/lib/$ABI/lib$APP_NAME.so"
 
+success "Native library created"
+
 #
 # Verify native library
 #
 
-echo "Checking native library..."
-
-echo
-echo "Dynamic dependencies:"
-readelf -d "$WORK_DIR/lib/$ABI/lib$APP_NAME.so" |
-  grep NEEDED || true
-
-echo
+section "Checking native library"
 
 if readelf -d "$WORK_DIR/lib/$ABI/lib$APP_NAME.so" |
   grep -q 'libc++_shared.so'; then
-  echo "Warning: libc++_shared.so is still required."
+  warning "libc++_shared.so is still required"
 else
-  echo "C++ runtime: statically linked"
+  success "C++ runtime statically linked"
 fi
-
-#
-# Verify NanoVG implementation.
-#
 
 if nm -D "$WORK_DIR/lib/$ABI/lib$APP_NAME.so" |
   grep -q ' T nvgCreateInternal$'; then
-  echo "NanoVG implementation: OK"
+  success "NanoVG implementation"
 else
-  echo
-  echo "ERROR: nvgCreateInternal is missing from native library."
-  echo
-  nm -D "$WORK_DIR/lib/$ABI/lib$APP_NAME.so" |
-    grep nvgCreateInternal || true
-  exit 1
+  die "nvgCreateInternal is missing from native library"
 fi
 
 #
-# Generate AndroidManifest.xml
+# Generate manifest
 #
 
-echo
-echo "Creating manifest..."
+section "Packaging"
+
+info "AndroidManifest.xml"
 
 cat > "$WORK_DIR/AndroidManifest.xml" <<EOF
 <?xml version="1.0" encoding="utf-8"?>
@@ -332,7 +504,7 @@ cat > "$WORK_DIR/AndroidManifest.xml" <<EOF
 
     <application
         android:allowBackup="false"
-        android:debuggable="false"
+        android:debuggable="$ANDROID_DEBUGGABLE"
         android:hasCode="false"
         android:label="$APP_NAME"
         android:supportsRtl="false">
@@ -358,15 +530,17 @@ cat > "$WORK_DIR/AndroidManifest.xml" <<EOF
 </manifest>
 EOF
 
+success "Manifest created"
+
 #
-# Package base APK
+# Package APK
 #
 
 UNSIGNED_APK="$WORK_DIR/$APP_NAME-unsigned.apk"
 ALIGNED_APK="$WORK_DIR/$APP_NAME-aligned.apk"
 FINAL_APK="$BUILD_DIR/$APP_NAME.apk"
 
-echo "Packaging APK..."
+info "Creating APK"
 
 "$AAPT" package \
   -f \
@@ -376,11 +550,9 @@ echo "Packaging APK..."
   --target-sdk-version "$API_LEVEL" \
   -F "$UNSIGNED_APK"
 
-#
-# Add native library.
-#
+success "Base APK"
 
-echo "Adding native library..."
+info "Adding native library"
 
 (
   cd "$WORK_DIR"
@@ -390,11 +562,9 @@ echo "Adding native library..."
     "lib/$ABI/lib$APP_NAME.so"
 )
 
-#
-# Align APK.
-#
+success "Native library added"
 
-echo "Aligning APK..."
+info "Aligning APK"
 
 "$ZIPALIGN" \
   -f \
@@ -403,12 +573,22 @@ echo "Aligning APK..."
   "$UNSIGNED_APK" \
   "$ALIGNED_APK"
 
+success "APK aligned"
+
 #
-# Create local debug signing key.
+# Signing key
 #
 
 if [ ! -f "$KEYSTORE" ]; then
-  echo "Creating local signing key..."
+  info "Creating $MODE signing key"
+
+  if [ "$MODE" = "debug" ]; then
+    KEY_NAME="Android Debug"
+    ORGANIZATION="Android"
+  else
+    KEY_NAME="andFM Release"
+    ORGANIZATION="andFM"
+  fi
 
   "$KEYTOOL" \
     -genkeypair \
@@ -416,73 +596,91 @@ if [ ! -f "$KEYSTORE" ]; then
     -keystore "$KEYSTORE" \
     -storepass android \
     -keypass android \
-    -alias androiddebugkey \
+    -alias "$KEY_ALIAS" \
     -keyalg RSA \
     -keysize 2048 \
     -validity 10000 \
-    -dname "CN=Android Debug,O=Android,C=US"
+    -dname "CN=$KEY_NAME,O=$ORGANIZATION,C=FR" \
+    >/dev/null 2>&1
+
+  success "Signing key created"
+else
+  success "Signing key already exists"
 fi
 
 #
-# Sign APK.
+# Sign
 #
 
-echo "Signing APK..."
+info "Signing APK"
 
 "$APKSIGNER" sign \
   --ks "$KEYSTORE" \
   --ks-pass pass:android \
   --key-pass pass:android \
-  --ks-key-alias androiddebugkey \
+  --ks-key-alias "$KEY_ALIAS" \
   --out "$FINAL_APK" \
-  "$ALIGNED_APK"
+  "$ALIGNED_APK" \
+  >/dev/null
+
+success "APK signed"
 
 #
-# Verify APK.
+# Verify
 #
 
-echo "Verifying APK..."
+info "Verifying APK"
 
 "$APKSIGNER" verify \
   --verbose \
-  "$FINAL_APK"
+  "$FINAL_APK" \
+  >/dev/null
+
+success "APK verified"
 
 #
-# Show final APK contents.
+# Final output
 #
 
-echo
-echo "APK contents:"
-unzip -l "$FINAL_APK" |
-  grep -E 'AndroidManifest|lib/|DejaVu'
+printf "\n"
 
-#
-# Final information
-#
+printf "%s%s╭──────────────────────────────────────╮%s\n" \
+  "$BOLD" "$GREEN" "$RESET"
 
-echo
-echo "========================================"
-echo "Build successful"
-echo "========================================"
-echo
-echo "APK:"
-echo "  $FINAL_APK"
-echo
-echo "ABI:"
-echo "  $ABI"
-echo
-echo "Package:"
-echo "  $PACKAGE_NAME"
-echo
-echo "Native library:"
-echo "  $WORK_DIR/lib/$ABI/lib$APP_NAME.so"
-echo
-echo "Install:"
-echo "  adb -s 127.0.0.1:5555 install -r \"$FINAL_APK\""
-echo
-echo "Run:"
-echo "  adb -s 127.0.0.1:5555 shell am start -n $PACKAGE_NAME/android.app.NativeActivity"
-echo
-echo "Log:"
-echo "  adb -s 127.0.0.1:5555 logcat | grep -E 'andFM|AndroidRuntime|DEBUG|FATAL'"
-echo
+printf "%s%s│         Build successful ✓           │%s\n" \
+  "$BOLD" "$GREEN" "$RESET"
+
+printf "%s%s╰──────────────────────────────────────╯%s\n" \
+  "$BOLD" "$GREEN" "$RESET"
+
+printf "\n"
+
+printf "  %sMode:%s        %s\n" \
+  "$DIM" "$RESET" "$MODE"
+
+printf "  %sAPK:%s         %s\n" \
+  "$DIM" "$RESET" "$FINAL_APK"
+
+printf "  %sNative:%s      %s\n" \
+  "$DIM" "$RESET" "$WORK_DIR/lib/$ABI/lib$APP_NAME.so"
+
+printf "  %sPackage:%s     %s\n" \
+  "$DIM" "$RESET" "$PACKAGE_NAME"
+
+printf "\n"
+
+printf "%sInstall:%s\n" "$BOLD" "$RESET"
+printf "  adb -s 127.0.0.1:5555 install -r \"%s\"\n" "$FINAL_APK"
+
+printf "\n"
+
+printf "%sRun:%s\n" "$BOLD" "$RESET"
+printf "  adb -s 127.0.0.1:5555 shell am start -n %s/android.app.NativeActivity\n" \
+  "$PACKAGE_NAME"
+
+printf "\n"
+
+printf "%sLog:%s\n" "$BOLD" "$RESET"
+printf "  adb -s 127.0.0.1:5555 logcat | grep -E 'andFM|AndroidRuntime|DEBUG|FATAL'\n"
+
+printf "\n"

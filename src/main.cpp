@@ -59,6 +59,8 @@ static const float kToolbarHeight = 36.0f;
 static const float kSidebarWidth = 140.0f;
 static const float kBottomNavHeight = 70.0f;
 static const float kStatusBarHeight = 22.0f;
+static const float kRowHeight = 56.0f;
+static const float kSidebarItemHeight = 44.0f;
 
 static const float kBackButtonX = 12.0f;
 static const float kBackButtonW = 90.0f;
@@ -77,10 +79,13 @@ static const SidebarPlace g_places[] =
 {
   {"Home", "/storage/emulated/0/"},
   {"Root", "/"},
-  {"Documents", "/storage/emulated/0/Documents/"},
-  {"Downloads", "/storage/emulated/0/Download/"},
   {"Pictures", "/storage/emulated/0/Pictures/"},
-  {"Videos", "/storage/emulated/0/Movies/"},
+  {"DCIM", "/storage/emulated/0/DCIM/"},
+  {"Download", "/storage/emulated/0/Download/"},
+  {"Android", "/storage/emulated/0/Android/"},
+  {"Movies", "/storage/emulated/0/Movies/"},
+  {"Notifications", "/storage/emulated/0/Notifications/"},
+  {"Music", "/storage/emulated/0/Music/"},
 };
 
 static const int g_placeCount =
@@ -136,6 +141,261 @@ static void drawFileIcon(
     2.0f);
   nvgFillColor(g_app.vg, rgb(120, 130, 150));
   nvgFill(g_app.vg);
+}
+
+static void drawHomeIcon(float x, float y, float size)
+{
+  nvgBeginPath(g_app.vg);
+  nvgMoveTo(g_app.vg, x + size * 0.5f, y);
+  nvgLineTo(g_app.vg, x + size, y + size * 0.5f);
+  nvgLineTo(g_app.vg, x + size * 0.85f, y + size * 0.5f);
+  nvgLineTo(g_app.vg, x + size * 0.85f, y + size);
+  nvgLineTo(g_app.vg, x + size * 0.15f, y + size);
+  nvgLineTo(g_app.vg, x + size * 0.15f, y + size * 0.5f);
+  nvgLineTo(g_app.vg, x, y + size * 0.5f);
+  nvgClosePath(g_app.vg);
+  nvgFillColor(g_app.vg, rgb(190, 200, 220));
+  nvgFill(g_app.vg);
+}
+
+static void drawRootIcon(float x, float y, float size)
+{
+  nvgBeginPath(g_app.vg);
+  nvgRoundedRect(
+    g_app.vg,
+    x + size * 0.10f,
+    y + size * 0.10f,
+    size * 0.80f,
+    size * 0.80f,
+    2.0f);
+  nvgFillColor(g_app.vg, rgb(160, 170, 190));
+  nvgFill(g_app.vg);
+}
+
+static void drawPictureIcon(float x, float y, float size)
+{
+  nvgBeginPath(g_app.vg);
+  nvgRoundedRect(g_app.vg, x, y, size, size, 2.0f);
+  nvgFillColor(g_app.vg, rgb(70, 90, 120));
+  nvgFill(g_app.vg);
+
+  nvgBeginPath(g_app.vg);
+  nvgMoveTo(g_app.vg, x + size * 0.10f, y + size * 0.85f);
+  nvgLineTo(g_app.vg, x + size * 0.40f, y + size * 0.35f);
+  nvgLineTo(g_app.vg, x + size * 0.60f, y + size * 0.60f);
+  nvgLineTo(g_app.vg, x + size * 0.75f, y + size * 0.45f);
+  nvgLineTo(g_app.vg, x + size * 0.90f, y + size * 0.85f);
+  nvgClosePath(g_app.vg);
+  nvgFillColor(g_app.vg, rgb(130, 180, 110));
+  nvgFill(g_app.vg);
+
+  nvgBeginPath(g_app.vg);
+  nvgCircle(g_app.vg, x + size * 0.72f, y + size * 0.25f, size * 0.09f);
+  nvgFillColor(g_app.vg, rgb(240, 200, 100));
+  nvgFill(g_app.vg);
+}
+
+static void drawDcimIcon(float x, float y, float size)
+{
+  nvgBeginPath(g_app.vg);
+  nvgRoundedRect(
+    g_app.vg,
+    x + size * 0.05f,
+    y + size * 0.25f,
+    size * 0.90f,
+    size * 0.60f,
+    2.0f);
+  nvgFillColor(g_app.vg, rgb(140, 150, 170));
+  nvgFill(g_app.vg);
+
+  nvgBeginPath(g_app.vg);
+  nvgRoundedRect(
+    g_app.vg,
+    x + size * 0.35f,
+    y + size * 0.15f,
+    size * 0.30f,
+    size * 0.15f,
+    1.0f);
+  nvgFill(g_app.vg);
+
+  nvgBeginPath(g_app.vg);
+  nvgCircle(g_app.vg, x + size * 0.5f, y + size * 0.55f, size * 0.18f);
+  nvgFillColor(g_app.vg, rgb(60, 70, 90));
+  nvgFill(g_app.vg);
+
+  nvgBeginPath(g_app.vg);
+  nvgCircle(g_app.vg, x + size * 0.5f, y + size * 0.55f, size * 0.09f);
+  nvgFillColor(g_app.vg, rgb(160, 180, 210));
+  nvgFill(g_app.vg);
+}
+
+static void drawDownloadIcon(float x, float y, float size)
+{
+  nvgBeginPath(g_app.vg);
+  nvgMoveTo(g_app.vg, x + size * 0.5f, y + size * 0.10f);
+  nvgLineTo(g_app.vg, x + size * 0.5f, y + size * 0.60f);
+  nvgStrokeColor(g_app.vg, rgb(190, 200, 220));
+  nvgStrokeWidth(g_app.vg, 2.0f);
+  nvgLineCap(g_app.vg, NVG_ROUND);
+  nvgStroke(g_app.vg);
+
+  nvgBeginPath(g_app.vg);
+  nvgMoveTo(g_app.vg, x + size * 0.30f, y + size * 0.42f);
+  nvgLineTo(g_app.vg, x + size * 0.5f, y + size * 0.62f);
+  nvgLineTo(g_app.vg, x + size * 0.70f, y + size * 0.42f);
+  nvgStroke(g_app.vg);
+
+  nvgBeginPath(g_app.vg);
+  nvgMoveTo(g_app.vg, x + size * 0.15f, y + size * 0.75f);
+  nvgLineTo(g_app.vg, x + size * 0.15f, y + size * 0.90f);
+  nvgLineTo(g_app.vg, x + size * 0.85f, y + size * 0.90f);
+  nvgLineTo(g_app.vg, x + size * 0.85f, y + size * 0.75f);
+  nvgStroke(g_app.vg);
+}
+
+static void drawAndroidIcon(float x, float y, float size)
+{
+  nvgBeginPath(g_app.vg);
+  nvgRoundedRect(
+    g_app.vg,
+    x + size * 0.15f,
+    y + size * 0.35f,
+    size * 0.70f,
+    size * 0.45f,
+    size * 0.22f);
+  nvgFillColor(g_app.vg, rgb(130, 200, 120));
+  nvgFill(g_app.vg);
+
+  nvgBeginPath(g_app.vg);
+  nvgMoveTo(g_app.vg, x + size * 0.30f, y + size * 0.35f);
+  nvgLineTo(g_app.vg, x + size * 0.22f, y + size * 0.15f);
+  nvgMoveTo(g_app.vg, x + size * 0.70f, y + size * 0.35f);
+  nvgLineTo(g_app.vg, x + size * 0.78f, y + size * 0.15f);
+  nvgStrokeColor(g_app.vg, rgb(130, 200, 120));
+  nvgStrokeWidth(g_app.vg, 1.5f);
+  nvgStroke(g_app.vg);
+
+  nvgBeginPath(g_app.vg);
+  nvgCircle(g_app.vg, x + size * 0.35f, y + size * 0.52f, size * 0.05f);
+  nvgFillColor(g_app.vg, rgb(30, 30, 30));
+  nvgFill(g_app.vg);
+
+  nvgBeginPath(g_app.vg);
+  nvgCircle(g_app.vg, x + size * 0.65f, y + size * 0.52f, size * 0.05f);
+  nvgFill(g_app.vg);
+}
+
+static void drawMovieIcon(float x, float y, float size)
+{
+  nvgBeginPath(g_app.vg);
+  nvgRect(
+    g_app.vg,
+    x + size * 0.10f,
+    y + size * 0.15f,
+    size * 0.80f,
+    size * 0.70f);
+  nvgFillColor(g_app.vg, rgb(120, 130, 150));
+  nvgFill(g_app.vg);
+
+  nvgBeginPath(g_app.vg);
+  nvgRect(g_app.vg, x + size * 0.18f, y + size * 0.20f, size * 0.12f, size * 0.10f);
+  nvgRect(g_app.vg, x + size * 0.44f, y + size * 0.20f, size * 0.12f, size * 0.10f);
+  nvgRect(g_app.vg, x + size * 0.70f, y + size * 0.20f, size * 0.12f, size * 0.10f);
+  nvgRect(g_app.vg, x + size * 0.18f, y + size * 0.70f, size * 0.12f, size * 0.10f);
+  nvgRect(g_app.vg, x + size * 0.44f, y + size * 0.70f, size * 0.12f, size * 0.10f);
+  nvgRect(g_app.vg, x + size * 0.70f, y + size * 0.70f, size * 0.12f, size * 0.10f);
+  nvgFillColor(g_app.vg, rgb(40, 40, 50));
+  nvgFill(g_app.vg);
+}
+
+static void drawBellIcon(float x, float y, float size)
+{
+  nvgBeginPath(g_app.vg);
+  nvgMoveTo(g_app.vg, x + size * 0.20f, y + size * 0.65f);
+  nvgQuadTo(
+    g_app.vg,
+    x + size * 0.20f,
+    y + size * 0.20f,
+    x + size * 0.50f,
+    y + size * 0.20f);
+  nvgQuadTo(
+    g_app.vg,
+    x + size * 0.80f,
+    y + size * 0.20f,
+    x + size * 0.80f,
+    y + size * 0.65f);
+  nvgLineTo(g_app.vg, x + size * 0.90f, y + size * 0.75f);
+  nvgLineTo(g_app.vg, x + size * 0.10f, y + size * 0.75f);
+  nvgClosePath(g_app.vg);
+  nvgFillColor(g_app.vg, rgb(220, 190, 100));
+  nvgFill(g_app.vg);
+
+  nvgBeginPath(g_app.vg);
+  nvgCircle(g_app.vg, x + size * 0.50f, y + size * 0.82f, size * 0.07f);
+  nvgFill(g_app.vg);
+}
+
+static void drawMusicIcon(float x, float y, float size)
+{
+  nvgBeginPath(g_app.vg);
+  nvgCircle(g_app.vg, x + size * 0.30f, y + size * 0.78f, size * 0.12f);
+  nvgFillColor(g_app.vg, rgb(190, 150, 220));
+  nvgFill(g_app.vg);
+
+  nvgBeginPath(g_app.vg);
+  nvgCircle(g_app.vg, x + size * 0.72f, y + size * 0.68f, size * 0.12f);
+  nvgFill(g_app.vg);
+
+  nvgBeginPath(g_app.vg);
+  nvgMoveTo(g_app.vg, x + size * 0.42f, y + size * 0.78f);
+  nvgLineTo(g_app.vg, x + size * 0.42f, y + size * 0.20f);
+  nvgLineTo(g_app.vg, x + size * 0.84f, y + size * 0.10f);
+  nvgLineTo(g_app.vg, x + size * 0.84f, y + size * 0.68f);
+  nvgStrokeColor(g_app.vg, rgb(190, 150, 220));
+  nvgStrokeWidth(g_app.vg, 2.0f);
+  nvgStroke(g_app.vg);
+
+  nvgBeginPath(g_app.vg);
+  nvgMoveTo(g_app.vg, x + size * 0.42f, y + size * 0.20f);
+  nvgLineTo(g_app.vg, x + size * 0.84f, y + size * 0.10f);
+  nvgStroke(g_app.vg);
+}
+
+static void drawPlaceIcon(int index, float x, float y, float size)
+{
+  switch (index)
+  {
+    case 0:
+      drawHomeIcon(x, y, size);
+      break;
+    case 1:
+      drawRootIcon(x, y, size);
+      break;
+    case 2:
+      drawPictureIcon(x, y, size);
+      break;
+    case 3:
+      drawDcimIcon(x, y, size);
+      break;
+    case 4:
+      drawDownloadIcon(x, y, size);
+      break;
+    case 5:
+      drawAndroidIcon(x, y, size);
+      break;
+    case 6:
+      drawMovieIcon(x, y, size);
+      break;
+    case 7:
+      drawBellIcon(x, y, size);
+      break;
+    case 8:
+      drawMusicIcon(x, y, size);
+      break;
+    default:
+      drawFileIcon(x, y, size);
+      break;
+  }
 }
 
 static long long getTimeMilliseconds()
@@ -320,7 +580,7 @@ static int createEntryItem(int entryIndex)
     g_app.ui,
     item,
     0,
-    BND_WIDGET_HEIGHT);
+    kRowHeight);
 
   uiSetEvents(
     g_app.ui,
@@ -443,7 +703,7 @@ static void buildUi()
   uiSetLayout(
     g_app.ui,
     column,
-    UI_HFILL | UI_VFILL);
+    UI_HFILL | UI_VFILL | UI_TOP);
 
   uiSetMargins(
     g_app.ui,
@@ -562,7 +822,7 @@ static void drawItem(
       nvgFill(g_app.vg);
     }
 
-    const float iconSize = 16.0f;
+    const float iconSize = 24.0f;
     const float iconX = rect.x + 10.0f;
     const float iconY = rect.y + (rect.h - iconSize) * 0.5f;
 
@@ -700,16 +960,26 @@ static void draw()
     nullptr);
 
   nvgFontSize(g_app.vg, 13.0f);
-  nvgFillColor(g_app.vg, rgb(190, 190, 190));
+  nvgFontFace(g_app.vg, "default");
+  nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
 
   for (int i = 0; i < g_placeCount; i++)
   {
     const float y = listTop + 32.0f +
-      static_cast<float>(i) * 22.0f;
+      static_cast<float>(i) * kSidebarItemHeight;
 
+    const float iconSize = 18.0f;
+
+    drawPlaceIcon(
+      i,
+      14.0f,
+      y - iconSize * 0.5f,
+      iconSize);
+
+    nvgFillColor(g_app.vg, rgb(190, 190, 190));
     nvgText(
       g_app.vg,
-      24.0f,
+      42.0f,
       y,
       g_places[i].name,
       nullptr);
@@ -780,18 +1050,29 @@ static void draw()
     canGoBack ? rgb(60, 90, 130) : rgb(50, 50, 50));
   nvgFill(g_app.vg);
 
+  const float backCx = kBackButtonX + kBackButtonW * 0.5f;
+  const float backCy = backButtonY + kBackButtonH * 0.5f;
+  const NVGcolor backFg =
+    canGoBack ? rgb(230, 230, 230) : rgb(120, 120, 120);
+
+  nvgBeginPath(g_app.vg);
+  nvgMoveTo(g_app.vg, backCx - 32.0f, backCy);
+  nvgLineTo(g_app.vg, backCx - 20.0f, backCy - 7.0f);
+  nvgMoveTo(g_app.vg, backCx - 32.0f, backCy);
+  nvgLineTo(g_app.vg, backCx - 20.0f, backCy + 7.0f);
+  nvgMoveTo(g_app.vg, backCx - 32.0f, backCy);
+  nvgLineTo(g_app.vg, backCx - 6.0f, backCy);
+  nvgStrokeColor(g_app.vg, backFg);
+  nvgStrokeWidth(g_app.vg, 2.0f);
+  nvgLineCap(g_app.vg, NVG_ROUND);
+  nvgLineJoin(g_app.vg, NVG_ROUND);
+  nvgStroke(g_app.vg);
+
   nvgFontSize(g_app.vg, 14.0f);
   nvgFontFace(g_app.vg, "default");
-  nvgFillColor(
-    g_app.vg,
-    canGoBack ? rgb(230, 230, 230) : rgb(120, 120, 120));
-  nvgTextAlign(g_app.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-  nvgText(
-    g_app.vg,
-    kBackButtonX + kBackButtonW * 0.5f,
-    backButtonY + kBackButtonH * 0.5f,
-    "<  Back",
-    nullptr);
+  nvgFillColor(g_app.vg, backFg);
+  nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+  nvgText(g_app.vg, backCx, backCy, "Back", nullptr);
 
   nvgBeginPath(g_app.vg);
   nvgRect(
@@ -818,7 +1099,7 @@ static void draw()
 
   const float contentHeight =
     static_cast<float>(g_app.entries.size()) *
-    static_cast<float>(BND_WIDGET_HEIGHT);
+    static_cast<float>(kRowHeight);
 
   if (contentHeight > sidebarHeight)
   {
@@ -882,7 +1163,7 @@ static bool isOnSidebar(
   float y)
 {
   const float listTop = kTopInset + kToolbarHeight;
-  const float itemHeight = 22.0f;
+  const float itemHeight = kSidebarItemHeight;
   const float startY = listTop + 32.0f;
 
   if (x < 0.0f || x > kSidebarWidth)
@@ -900,7 +1181,7 @@ static bool isOnSidebar(
 static void handleSidebarClick(float y)
 {
   const float listTop = kTopInset + kToolbarHeight;
-  const float itemHeight = 22.0f;
+  const float itemHeight = kSidebarItemHeight;
   const float startY = listTop + 32.0f;
 
   const int idx = static_cast<int>(
@@ -1028,7 +1309,7 @@ static void handleScroll(int direction)
 {
   const float contentHeight =
     static_cast<float>(g_app.entries.size()) *
-    static_cast<float>(BND_WIDGET_HEIGHT);
+    static_cast<float>(kRowHeight);
 
   const float visibleHeight =
     static_cast<float>(g_app.height) -
@@ -1039,7 +1320,7 @@ static void handleScroll(int direction)
   if (maxScroll < 0.0f)
     maxScroll = 0.0f;
 
-  const float step = static_cast<float>(BND_WIDGET_HEIGHT) * 3.0f;
+  const float step = static_cast<float>(kRowHeight) * 3.0f;
 
   float newOffset =
     g_app.scrollOffset + static_cast<float>(direction) * step;

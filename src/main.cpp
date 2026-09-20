@@ -10,6 +10,8 @@
 #include "android_native_app_glue.h"
 
 #include "../third_party/nanovg/nanovg.h"
+
+#define NANOVG_GLES2
 #include "../third_party/nanovg/nanovg_gl.h"
 
 #include "../third_party/oui-blendish/oui.h"
@@ -559,7 +561,7 @@ static void handleCommand(
 void android_main(
   struct android_app *app)
 {
-  app_dummy();
+  //app_dummy();
 
   app->onAppCmd = handleCommand;
   app->onInputEvent = handleInput;

@@ -1,205 +1,334 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
-set -euo pipefail
+set -eu
 
 APP_NAME="andFM"
 PACKAGE_NAME="org.linarcx.andFM"
 
-ANDROID_API="${ANDROID_API:-30}"
-ABI="${ABI:-x86_64}"
+API_LEVEL="30"
+ABI="x86_64"
 
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+BUILD_DIR="$ROOT_DIR/build"
+WORK_DIR="$BUILD_DIR/work"
 
-SRC_DIR="$ROOT/src"
-ASSET_DIR="$ROOT/assets"
-TP_DIR="$ROOT/third_party"
-BUILD_DIR="$ROOT/build"
+SRC_DIR="$ROOT_DIR/src"
+THIRD_PARTY="$ROOT_DIR/third_party"
 
-RAW_DIR="$TP_DIR/rawdrawandroid"
-OUI_DIR="$TP_DIR/oui-blendish"
-NVG_DIR="$TP_DIR/nanovg"
+RAWDRAW_DIR="$THIRD_PARTY/rawdrawandroid"
+NANOVG_DIR="$THIRD_PARTY/nanovg"
+OUI_DIR="$THIRD_PARTY/oui-blendish"
 
-APK="$BUILD_DIR/${APP_NAME}.apk"
-UNSIGNED_APK="$BUILD_DIR/${APP_NAME}-unsigned.apk"
-MANIFEST="$BUILD_DIR/AndroidManifest.xml"
+ANDROID_HOME="${ANDROID_HOME:-$HOME/android-sdk}"
 
-mkdir -p "$TP_DIR" "$BUILD_DIR" "$ASSET_DIR"
-
-die()
-{
-  echo "error: $*" >&2
-  exit 1
-}
-
-find_sdk()
-{
-  if [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME" ]; then
-    printf '%s\n' "$ANDROID_HOME"
-    return
-  fi
-
-  if [ -n "${ANDROID_SDK_ROOT:-}" ] && [ -d "$ANDROID_SDK_ROOT" ]; then
-    printf '%s\n' "$ANDROID_SDK_ROOT"
-    return
-  fi
-
-  if [ -d "$HOME/Android/Sdk" ]; then
-    printf '%s\n' "$HOME/Android/Sdk"
-    return
-  fi
-
-  die "Android SDK not found. Set ANDROID_HOME."
-}
-
-SDK="$(find_sdk)"
-
-NDK="${ANDROID_NDK:-${ANDROID_NDK_HOME:-}}"
-
-if [ -z "$NDK" ]; then
-  for candidate in "$SDK"/ndk/*; do
-    if [ -d "$candidate" ]; then
-      NDK="$candidate"
-    fi
-  done
-fi
-
-[ -n "$NDK" ] || die "Android NDK not found."
-
-BUILD_TOOLS=""
-
-for candidate in "$SDK"/build-tools/*; do
-  if [ -d "$candidate" ]; then
-    BUILD_TOOLS="$candidate"
-  fi
-done
-
-[ -n "$BUILD_TOOLS" ] || die "Android build-tools not found."
-
-PLATFORM="$SDK/platforms/android-$ANDROID_API"
-
-[ -d "$PLATFORM" ] ||
-  die "Android platform android-$ANDROID_API not found."
-
-AAPT="$BUILD_TOOLS/aapt"
-ZIPALIGN="$BUILD_TOOLS/zipalign"
-APKSIGNER="$BUILD_TOOLS/apksigner"
-
-[ -x "$AAPT" ] || die "aapt not found."
-[ -x "$ZIPALIGN" ] || die "zipalign not found."
-[ -x "$APKSIGNER" ] || die "apksigner not found."
+SDK_PLATFORM="$ANDROID_HOME/platforms/android-$API_LEVEL/android.jar"
+BUILD_TOOLS_DIR="$ANDROID_HOME/build-tools/35.0.0"
+NDK_DIR="$ANDROID_HOME/ndk/27.2.12479018"
 
 HOST_TAG="linux-x86_64"
 
-case "$(uname -s)" in
-  Darwin)
-    HOST_TAG="darwin-x86_64"
-    ;;
-esac
+CC="$NDK_DIR/toolchains/llvm/prebuilt/$HOST_TAG/bin/clang"
+CXX="$NDK_DIR/toolchains/llvm/prebuilt/$HOST_TAG/bin/clang++"
 
-TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/$HOST_TAG/bin"
+TARGET="$ABI-linux-android$API_LEVEL"
 
-CXX="$TOOLCHAIN/x86_64-linux-android${ANDROID_API}-clang++"
-CC="$TOOLCHAIN/x86_64-linux-android${ANDROID_API}-clang"
+AAPT="$BUILD_TOOLS_DIR/aapt"
+ZIPALIGN="$BUILD_TOOLS_DIR/zipalign"
+APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
 
-[ -x "$CXX" ] || die "Android C++ compiler not found: $CXX"
-[ -x "$CC" ] || die "Android C compiler not found: $CC"
+KEYTOOL="${JAVA_HOME:-}/bin/keytool"
 
-if [ ! -f "$ASSET_DIR/DejaVuSans.ttf" ]; then
-  echo "Downloading DejaVu Sans..."
-
-  curl -L \
-    --fail \
-    --silent \
-    --show-error \
-    "https://raw.githubusercontent.com/geetrepo/oui-blendish/master/DejaVuSans.ttf" \
-    -o "$ASSET_DIR/DejaVuSans.ttf"
+if [ ! -x "$KEYTOOL" ]; then
+  KEYTOOL="$(command -v keytool || true)"
 fi
 
-rm -rf "$BUILD_DIR/work"
+KEYSTORE="$BUILD_DIR/debug.keystore"
+
+die()
+{
+  echo "Error: $*" >&2
+  exit 1
+}
+
+echo "== andFM build =="
+echo "Root:       $ROOT_DIR"
+echo "ABI:        $ABI"
+echo "API:        $API_LEVEL"
+echo "NDK:        $NDK_DIR"
+echo
+
+#
+# Validate tools
+#
+
+[ -f "$SDK_PLATFORM" ] ||
+  die "Android platform not found: $SDK_PLATFORM"
+
+[ -x "$CC" ] ||
+  die "Clang not found: $CC"
+
+[ -x "$CXX" ] ||
+  die "Clang++ not found: $CXX"
+
+[ -x "$AAPT" ] ||
+  die "aapt not found: $AAPT"
+
+[ -x "$ZIPALIGN" ] ||
+  die "zipalign not found: $ZIPALIGN"
+
+[ -x "$APKSIGNER" ] ||
+  die "apksigner not found: $APKSIGNER"
+
+[ -n "$KEYTOOL" ] ||
+  die "keytool not found"
+
+#
+# Validate source tree
+#
+
+[ -f "$SRC_DIR/main.cpp" ] ||
+  die "Missing source: $SRC_DIR/main.cpp"
+
+[ -f "$THIRD_PARTY/impl.c" ] ||
+  die "Missing implementation source: $THIRD_PARTY/impl.c"
+
+[ -f "$RAWDRAW_DIR/android_native_app_glue.c" ] ||
+  die "Missing rawdrawandroid glue"
+
+[ -f "$RAWDRAW_DIR/android_native_app_glue.h" ] ||
+  die "Missing rawdrawandroid glue header"
+
+[ -f "$NANOVG_DIR/nanovg.h" ] ||
+  die "Missing NanoVG"
+
+[ -f "$NANOVG_DIR/nanovg_gl.h" ] ||
+  die "Missing NanoVG GL backend"
+
+[ -f "$OUI_DIR/oui.h" ] ||
+  die "Missing OUI"
+
+[ -f "$OUI_DIR/blendish.h" ] ||
+  die "Missing Blendish"
+
+#
+# Clean build
+#
+
+rm -rf "$BUILD_DIR"
 
 mkdir -p \
-  "$BUILD_DIR/work/lib/x86_64" \
-  "$BUILD_DIR/work/assets"
+  "$WORK_DIR/lib/$ABI" \
+  "$WORK_DIR/assets"
 
-cp \
-  "$ASSET_DIR/DejaVuSans.ttf" \
-  "$BUILD_DIR/work/assets/DejaVuSans.ttf"
+#
+# Copy application font
+#
+
+FONT="$ROOT_DIR/assets/DejaVuSans.ttf"
+
+[ -f "$FONT" ] ||
+  die "Missing font: $FONT"
+
+cp "$FONT" "$WORK_DIR/assets/DejaVuSans.ttf"
+
+#
+# Common include paths
+#
+
+INCLUDES="
+  -I$ROOT_DIR
+  -I$SRC_DIR
+  -I$THIRD_PARTY
+  -I$RAWDRAW_DIR
+  -I$NANOVG_DIR
+  -I$OUI_DIR
+"
+
+#
+# Warnings for our C++ application.
+#
+
+APP_WARNINGS="
+  -Wall
+  -Wextra
+  -Wpedantic
+"
+
+#
+# Warnings for third-party C sources.
+#
+# rawdrawandroid contains intentionally old C constructs and
+# unused callback parameters. Keep those warnings suppressed
+# so the build output remains useful.
+#
+
+THIRD_PARTY_WARNINGS="
+  -Wall
+  -Wextra
+  -Wno-strict-prototypes
+  -Wno-unused-parameter
+  -Wno-format-pedantic
+  -Wno-gnu-anonymous-struct
+  -Wno-nested-anon-types
+"
+
+#
+# Common Android compiler flags.
+#
+
+ANDROID_CFLAGS="
+  --target=$TARGET
+  -fPIC
+  -ffunction-sections
+  -fdata-sections
+"
+
+#
+# Compile rawdrawandroid glue
+#
 
 echo "Compiling rawdrawandroid glue..."
 
 "$CC" \
-  -std=c11 \
-  -DANDROID \
-  -DAPPNAME=\"andFM\" \
-  -I"$RAW_DIR" \
-  -I"$NDK/sysroot/usr/include" \
-  -fPIC \
-  -ffunction-sections \
-  -fdata-sections \
-  -fvisibility=hidden \
-  -Os \
+  $ANDROID_CFLAGS \
+  $THIRD_PARTY_WARNINGS \
+  $INCLUDES \
+  -DAPPNAME='"andFM"' \
   -c \
-  "$RAW_DIR/android_native_app_glue.c" \
-  -o "$BUILD_DIR/work/android_native_app_glue.o"
+  "$RAWDRAW_DIR/android_native_app_glue.c" \
+  -o "$WORK_DIR/android_native_app_glue.o"
+
+#
+# Compile NanoVG / OUI / Blendish implementations.
+#
+# impl.c contains:
+#
+#   NANOVG_GL2_IMPLEMENTATION
+#   OUI_IMPLEMENTATION
+#   BLENDISH_IMPLEMENTATION
+#
+# Do not define these implementation macros in main.cpp.
+#
+
+echo "Compiling NanoVG/OUI implementations..."
+
+"$CC" \
+  $ANDROID_CFLAGS \
+  $THIRD_PARTY_WARNINGS \
+  $INCLUDES \
+  -c \
+  "$ROOT_DIR/third_party/nanovg/nanovg.c" \
+  -o "$WORK_DIR/nanovg.o"
+
+"$CC" \
+  $ANDROID_CFLAGS \
+  $THIRD_PARTY_WARNINGS \
+  $INCLUDES \
+  -c \
+  "$ROOT_DIR/third_party/impl.c" \
+  -o "$WORK_DIR/impl.o"
+
+#echo "Compiling NanoVG/OUI implementations..."
+#
+#"$CC" \
+#  $ANDROID_CFLAGS \
+#  $THIRD_PARTY_WARNINGS \
+#  $INCLUDES \
+#  -c \
+#  "$THIRD_PARTY/impl.c" \
+#  -o "$WORK_DIR/impl.o"
+
+#
+# Compile application
+#
 
 echo "Compiling application..."
 
 "$CXX" \
+  $ANDROID_CFLAGS \
+  $APP_WARNINGS \
+  $INCLUDES \
   -std=c++17 \
-  -DANDROID \
-  -DAPPNAME=\"andFM\" \
-  -DNANOVG_GLES2_IMPLEMENTATION \
-  -I"$RAW_DIR" \
-  -I"$OUI_DIR" \
-  -I"$NVG_DIR/src" \
-  -I"$NDK/sysroot/usr/include" \
-  -fPIC \
-  -ffunction-sections \
-  -fdata-sections \
-  -fvisibility=hidden \
   -fno-exceptions \
   -fno-rtti \
-  -Os \
-  -Wall \
-  -Wextra \
-  -Wpedantic \
   -c \
   "$SRC_DIR/main.cpp" \
-  -o "$BUILD_DIR/work/main.o"
+  -o "$WORK_DIR/main.o"
+
+#
+# Link native library
+#
 
 echo "Linking..."
 
 "$CXX" \
-  "$BUILD_DIR/work/main.o" \
-  "$BUILD_DIR/work/android_native_app_glue.o" \
+  --target="$TARGET" \
   -shared \
   -static-libstdc++ \
   -Wl,--gc-sections \
-  -Wl,-z,relro \
-  -Wl,-z,now \
-  -Wl,-z,noexecstack \
-  -Wl,-s \
-  -Wl,-u,ANativeActivity_onCreate \
-  -o "$BUILD_DIR/work/lib/x86_64/libandFM.so" \
-  -landroid \
+  -Wl,-soname,lib"$APP_NAME".so \
+  "$WORK_DIR/main.o" \
+  "$WORK_DIR/android_native_app_glue.o" \
+  "$WORK_DIR/nanovg.o" \
+  "$WORK_DIR/impl.o" \
   -llog \
-  -lEGL \
+  -landroid \
   -lGLESv2 \
-  -lm
+  -lEGL \
+  -o "$WORK_DIR/lib/$ABI/lib$APP_NAME.so"
 
+#
+# Verify native library
+#
+
+echo "Checking native library..."
+
+echo
+echo "Dynamic dependencies:"
+readelf -d "$WORK_DIR/lib/$ABI/lib$APP_NAME.so" |
+  grep NEEDED || true
+
+echo
+
+if readelf -d "$WORK_DIR/lib/$ABI/lib$APP_NAME.so" |
+  grep -q 'libc++_shared.so'; then
+  echo "Warning: libc++_shared.so is still required."
+else
+  echo "C++ runtime: statically linked"
+fi
+
+#
+# Verify NanoVG implementation.
+#
+
+if nm -D "$WORK_DIR/lib/$ABI/lib$APP_NAME.so" |
+  grep -q ' T nvgCreateInternal$'; then
+  echo "NanoVG implementation: OK"
+else
+  echo
+  echo "ERROR: nvgCreateInternal is missing from native library."
+  echo
+  nm -D "$WORK_DIR/lib/$ABI/lib$APP_NAME.so" |
+    grep nvgCreateInternal || true
+  exit 1
+fi
+
+#
+# Generate AndroidManifest.xml
+#
+
+echo
 echo "Creating manifest..."
 
-cat > "$MANIFEST" <<EOF
+cat > "$WORK_DIR/AndroidManifest.xml" <<EOF
 <?xml version="1.0" encoding="utf-8"?>
-
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
     package="$PACKAGE_NAME">
 
     <uses-sdk
         android:minSdkVersion="23"
-        android:targetSdkVersion="$ANDROID_API" />
+        android:targetSdkVersion="$API_LEVEL" />
 
     <application
         android:allowBackup="false"
@@ -215,13 +344,11 @@ cat > "$MANIFEST" <<EOF
 
             <meta-data
                 android:name="android.app.lib_name"
-                android:value="andFM" />
+                android:value="$APP_NAME" />
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
-                <category
-                    android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
         </activity>
@@ -231,45 +358,61 @@ cat > "$MANIFEST" <<EOF
 </manifest>
 EOF
 
-echo "Packaging APK..."
+#
+# Package base APK
+#
 
-rm -f "$UNSIGNED_APK"
-rm -f "$APK"
+UNSIGNED_APK="$WORK_DIR/$APP_NAME-unsigned.apk"
+ALIGNED_APK="$WORK_DIR/$APP_NAME-aligned.apk"
+FINAL_APK="$BUILD_DIR/$APP_NAME.apk"
+
+echo "Packaging APK..."
 
 "$AAPT" package \
   -f \
-  -M "$MANIFEST" \
-  -I "$PLATFORM/android.jar" \
-  -A "$BUILD_DIR/work/assets" \
-  -F "$UNSIGNED_APK" \
-  --target-sdk-version "$ANDROID_API"
+  -M "$WORK_DIR/AndroidManifest.xml" \
+  -I "$SDK_PLATFORM" \
+  -A "$WORK_DIR/assets" \
+  --target-sdk-version "$API_LEVEL" \
+  -F "$UNSIGNED_APK"
+
+#
+# Add native library.
+#
 
 echo "Adding native library..."
 
 (
-  cd "$BUILD_DIR/work"
+  cd "$WORK_DIR"
 
-  zip \
-    -q \
+  zip -q \
     "$UNSIGNED_APK" \
-    "lib/x86_64/libandFM.so"
+    "lib/$ABI/lib$APP_NAME.so"
 )
+
+#
+# Align APK.
+#
 
 echo "Aligning APK..."
 
 "$ZIPALIGN" \
   -f \
+  -p \
   4 \
   "$UNSIGNED_APK" \
-  "$APK"
+  "$ALIGNED_APK"
 
-KEYSTORE="$BUILD_DIR/debug.keystore"
+#
+# Create local debug signing key.
+#
 
 if [ ! -f "$KEYSTORE" ]; then
   echo "Creating local signing key..."
 
-  keytool \
+  "$KEYTOOL" \
     -genkeypair \
+    -v \
     -keystore "$KEYSTORE" \
     -storepass android \
     -keypass android \
@@ -280,6 +423,10 @@ if [ ! -f "$KEYSTORE" ]; then
     -dname "CN=Android Debug,O=Android,C=US"
 fi
 
+#
+# Sign APK.
+#
+
 echo "Signing APK..."
 
 "$APKSIGNER" sign \
@@ -287,9 +434,31 @@ echo "Signing APK..."
   --ks-pass pass:android \
   --key-pass pass:android \
   --ks-key-alias androiddebugkey \
-  "$APK"
+  --out "$FINAL_APK" \
+  "$ALIGNED_APK"
 
-rm -f "$UNSIGNED_APK"
+#
+# Verify APK.
+#
+
+echo "Verifying APK..."
+
+"$APKSIGNER" verify \
+  --verbose \
+  "$FINAL_APK"
+
+#
+# Show final APK contents.
+#
+
+echo
+echo "APK contents:"
+unzip -l "$FINAL_APK" |
+  grep -E 'AndroidManifest|lib/|DejaVu'
+
+#
+# Final information
+#
 
 echo
 echo "========================================"
@@ -297,7 +466,7 @@ echo "Build successful"
 echo "========================================"
 echo
 echo "APK:"
-echo "  $APK"
+echo "  $FINAL_APK"
 echo
 echo "ABI:"
 echo "  $ABI"
@@ -305,12 +474,15 @@ echo
 echo "Package:"
 echo "  $PACKAGE_NAME"
 echo
+echo "Native library:"
+echo "  $WORK_DIR/lib/$ABI/lib$APP_NAME.so"
+echo
 echo "Install:"
-echo "  adb -s 127.0.0.1:5555 install -r \"$APK\""
+echo "  adb -s 127.0.0.1:5555 install -r \"$FINAL_APK\""
 echo
 echo "Run:"
 echo "  adb -s 127.0.0.1:5555 shell am start -n $PACKAGE_NAME/android.app.NativeActivity"
 echo
 echo "Log:"
-echo "  adb -s 127.0.0.1:5555 logcat | grep andFM"
+echo "  adb -s 127.0.0.1:5555 logcat | grep -E 'andFM|AndroidRuntime|DEBUG|FATAL'"
 echo

@@ -38,17 +38,20 @@
 menu () {
   commands=(
     # main
-    "build(debug)" "create patch" "qemu(android x86-64)" "adb connect" "adb install"
-    "pair to wifi and install adb"
-    "adb uninstall" "adb run" "adb log" "adb close apk"
-    "adb reboot android OS" "adb poweroff android OS"
+    "Create patch"
 
-    # debug
-    "clean(debug)"
+    # emulator
+    "Build(x86_64)"
+    "Launch qemu emulator (android x86-64)" "Connect to emulator"
+    "Install .apk to emulator" "Uninstall .apk from emulator"
+    "adb run" "adb log" "adb close apk" "adb reboot android OS" "adb poweroff android OS"
+    "clean(x86_64)"
 
-    # release
-    "build(release)" "clean(release)"
-  
+    # real device
+    "build(arm64_v8a)"
+    "install on real device(arm64_v8a) with wifi"
+    "clean(arm64_v8a)"
+ 
     # documentation
     "doxygen(generate)" 
     "doxygen(show)" 
@@ -103,8 +106,18 @@ menu () {
   selected=$(printf '%s\n' "${commands[@]}" | fzf --header="project:")
   
   case $selected in
-    "build(debug)")
-      ./scripts/build.sh --debug
+    "Create patch")
+      read -r -p "Enter name of yoru patch: (it will be save in patches/) " filename
+      file="patches/${filename}.json"
+      nvim "$file"
+      if [ $? -eq 0 ] && [ -s "$file" ]; then
+        ./scripts/applyPatch.sh $file
+      fi
+      ;;
+
+
+    "Build(x86_64)")
+      ./scripts/build.sh --debug --x86_64
       if [ $? -eq 1 ]; then
         # error
         mpg123 -f 3000 /home/linarcx/VoidConf/assets/error2.mp3 > /dev/null 2>&1 
@@ -113,15 +126,7 @@ menu () {
         mpg123 -f 3000 /home/linarcx/VoidConf/assets/success.mp3 > /dev/null 2>&1 
       fi
       ;;
-    "create patch")
-      read -r -p "Enter name of yoru patch: (it will be save in patches/) " filename
-      file="patches/${filename}.json"
-      nvim "$file"
-      if [ $? -eq 0 ] && [ -s "$file" ]; then
-        ./scripts/applyPatch.sh $file
-      fi
-      ;;
-    "qemu(android x86-64)")
+    "Launch qemu emulator (android x86-64)")
       qemu-system-x86_64 \
         -enable-kvm \
         -m 6144 \
@@ -130,7 +135,7 @@ menu () {
         -drive file=~/qemu/android.qcow2,format=qcow2 &
       echo -e "Please first run these commands in Android X86 Shell, before trying to connect adb to it:\nsu\nsetprop service.adb.tcp.port 5555\nstop adbd\nstart adbd"
       ;;
-    "adb connect")
+    "Connect to emulator")
       # adb devices
       # adb connect 127.0.0.1:5555
       devices=$(adb devices | awk 'NR > 1 && $2 == "device" {print $1}')
@@ -154,7 +159,7 @@ menu () {
       
       adb connect "$selected"
       ;;
-    "adb install")
+    "Install .apk to emulator")
       # unisntall old app first
       echo "--> Uninstalling old app first"
       adb -s 127.0.0.1:5555 uninstall org.linarcx.andFM
@@ -200,7 +205,49 @@ menu () {
       echo "--> Running andFM..."
       adb -s 127.0.0.1:5555 shell am start -n org.linarcx.andFM/android.app.NativeActivity
       ;;
-    "pair to wifi and install adb")
+    "Uninstall .apk from emulator")
+      adb -s 127.0.0.1:5555 uninstall org.linarcx.andFM
+      ;;
+    "adb run")
+      adb -s 127.0.0.1:5555 shell am start -n org.linarcx.andFM/android.app.NativeActivity
+      ;;
+    "adb log")
+      adb -s 127.0.0.1:5555 logcat | grep andFM
+      ;;
+    "adb close apk")
+      adb -s 127.0.0.1:5555 shell am force-stop org.linarcx.andFM
+      ;;
+    "adb reboot android OS")
+      adb -s 127.0.0.1:5555 shell reboot -p
+      ;;
+    "adb poweroff android OS")
+      adb -s 127.0.0.1:5555 shell reboot --poweroff
+      ;;
+
+    "clean(x86_64)")
+      echo ">>> cleaning build/debug directory"
+      ./scripts/build.sh --clean --debug  --x86_64
+      if [ $? -eq 1 ]; then
+        # error
+        mpg123 -f 3000 /home/linarcx/VoidConf/assets/error2.mp3 > /dev/null 2>&1 
+      else
+        # success
+        mpg123 -f 3000 /home/linarcx/VoidConf/assets/success.mp3 > /dev/null 2>&1 
+      fi
+      ;;
+
+
+    "build(arm64_v8a)")
+      ./scripts/build.sh --debug --arm64_v8a
+      if [ $? -eq 1 ]; then
+        # error
+        mpg123 -f 3000 /home/linarcx/VoidConf/assets/error2.mp3 > /dev/null 2>&1 
+      else
+        # success
+        mpg123 -f 3000 /home/linarcx/VoidConf/assets/success.mp3 > /dev/null 2>&1 
+      fi
+      ;;
+    "install on real device(arm64_v8a) with wifi")
       echo "Showing Devices"
       output=$(adb devices)
  
@@ -265,27 +312,9 @@ menu () {
       adb -s $device uninstall org.linarcx.andFM
       adb -s $device install -r "$APK"
       ;;
-    "adb uninstall")
-      adb -s 127.0.0.1:5555 uninstall org.linarcx.andFM
-      ;;
-    "adb run")
-      adb -s 127.0.0.1:5555 shell am start -n org.linarcx.andFM/android.app.NativeActivity
-      ;;
-    "adb log")
-      adb -s 127.0.0.1:5555 logcat | grep andFM
-      ;;
-    "adb close apk")
-      adb -s 127.0.0.1:5555 shell am force-stop org.linarcx.andFM
-      ;;
-    "adb reboot android OS")
-      adb -s 127.0.0.1:5555 shell reboot -p
-      ;;
-    "adb poweroff android OS")
-      adb -s 127.0.0.1:5555 shell reboot --poweroff
-      ;;
-    "clean(debug)")
+    "clean(arm64_v8a)")
       echo ">>> cleaning build/debug directory"
-      ./scripts/build.sh --clean --debug
+      ./scripts/build.sh --clean --debug --arm64_v8a
       if [ $? -eq 1 ]; then
         # error
         mpg123 -f 3000 /home/linarcx/VoidConf/assets/error2.mp3 > /dev/null 2>&1 
@@ -294,6 +323,12 @@ menu () {
         mpg123 -f 3000 /home/linarcx/VoidConf/assets/success.mp3 > /dev/null 2>&1 
       fi
       ;;
+
+
+
+
+
+
     "build(release)")
       ./scripts/build.sh --release 
       if [ $? -eq 1 ]; then
@@ -314,6 +349,8 @@ menu () {
         mpg123 -f 3000 /home/linarcx/VoidConf/assets/success.mp3 > /dev/null 2>&1 
       fi
       ;;
+
+
     "doxygen(generate)")
       doxygen
       ;;

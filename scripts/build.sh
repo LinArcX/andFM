@@ -6,7 +6,6 @@ APP_NAME="andFM"
 PACKAGE_NAME="org.linarcx.andFM"
 
 API_LEVEL="30"
-ABI="arm64-v8a"
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 BUILD_ROOT="$ROOT_DIR/build"
@@ -28,8 +27,6 @@ HOST_TAG="linux-x86_64"
 
 CC="$NDK_DIR/toolchains/llvm/prebuilt/$HOST_TAG/bin/clang"
 CXX="$NDK_DIR/toolchains/llvm/prebuilt/$HOST_TAG/bin/clang++"
-
-TARGET="aarch64-linux-android$API_LEVEL"
 
 AAPT="$BUILD_TOOLS_DIR/aapt"
 ZIPALIGN="$BUILD_TOOLS_DIR/zipalign"
@@ -123,6 +120,7 @@ title()
 
 MODE=""
 CLEAN="false"
+ABI=""
 
 for ARG in "$@"; do
   case "$ARG" in
@@ -142,16 +140,36 @@ for ARG in "$@"; do
       MODE="release"
       ;;
 
+    --x86_64)
+      if [ -n "$ABI" ]; then
+        die "choose either --x86_64 or --arm64_v8a"
+      fi
+
+      ABI="x86_64"
+      ;;
+
+    --arm64_v8a)
+      if [ -n "$ABI" ]; then
+        die "choose either --x86_64 or --arm64_v8a"
+      fi
+
+      ABI="arm64_v8a"
+      ;;
+
     --clean)
       CLEAN="true"
       ;;
 
     *)
       printf "%s\n" "Usage:"
-      printf "  %s --debug\n" "$0"
-      printf "  %s --release\n" "$0"
-      printf "  %s --clean --debug\n" "$0"
-      printf "  %s --clean --release\n" "$0"
+      printf "  %s --debug --x86_64\n" "$0"
+      printf "  %s --debug --arm64_v8a\n" "$0"
+      printf "  %s --release --x86_64\n" "$0"
+      printf "  %s --release --arm64_v8a\n" "$0"
+      printf "  %s --clean --debug --x86_64\n" "$0"
+      printf "  %s --clean --debug --arm64_v8a\n" "$0"
+      printf "  %s --clean --release --x86_64\n" "$0"
+      printf "  %s --clean --release --arm64_v8a\n" "$0"
       exit 1
       ;;
   esac
@@ -161,11 +179,27 @@ if [ -z "$MODE" ]; then
   die "build mode is required (--debug or --release)"
 fi
 
+if [ -z "$ABI" ]; then
+  die "target ABI is required (--x86_64 or --arm64_v8a)"
+fi
+
+#
+# Target ABI configuration
+#
+
+if [ "$ABI" = "x86_64" ]; then
+  ANDROID_ABI="x86_64"
+  TARGET="x86_64-linux-android$API_LEVEL"
+else
+  ANDROID_ABI="arm64-v8a"
+  TARGET="aarch64-linux-android$API_LEVEL"
+fi
+
 #
 # Mode-specific paths
 #
 
-BUILD_DIR="$BUILD_ROOT/$MODE"
+BUILD_DIR="$BUILD_ROOT/$ABI/$MODE"
 WORK_DIR="$BUILD_DIR/work"
 
 if [ "$MODE" = "debug" ]; then
@@ -237,7 +271,7 @@ printf "  %sOutput:%s     %s\n" \
   "$DIM" "$RESET" "$BUILD_DIR"
 
 printf "  %sABI:%s        %s\n" \
-  "$DIM" "$RESET" "$ABI"
+  "$DIM" "$RESET" "$ANDROID_ABI"
 
 printf "  %sAPI:%s        %s\n" \
   "$DIM" "$RESET" "$API_LEVEL"
@@ -320,7 +354,7 @@ success "Blendish"
 rm -rf "$WORK_DIR"
 
 mkdir -p \
-  "$WORK_DIR/lib/$ABI" \
+  "$WORK_DIR/lib/$ANDROID_ABI" \
   "$WORK_DIR/assets"
 
 FONT="$ROOT_DIR/assets/DejaVuSans.ttf"
@@ -462,7 +496,7 @@ info "lib$APP_NAME.so"
   -landroid \
   -lGLESv2 \
   -lEGL \
-  -o "$WORK_DIR/lib/$ABI/lib$APP_NAME.so"
+  -o "$WORK_DIR/lib/$ANDROID_ABI/lib$APP_NAME.so"
 
 success "Native library created"
 
@@ -472,14 +506,14 @@ success "Native library created"
 
 section "Checking native library"
 
-if readelf -d "$WORK_DIR/lib/$ABI/lib$APP_NAME.so" |
+if readelf -d "$WORK_DIR/lib/$ANDROID_ABI/lib$APP_NAME.so" |
   grep -q 'libc++_shared.so'; then
   warning "libc++_shared.so is still required"
 else
   success "C++ runtime statically linked"
 fi
 
-if nm -D "$WORK_DIR/lib/$ABI/lib$APP_NAME.so" |
+if nm -D "$WORK_DIR/lib/$ANDROID_ABI/lib$APP_NAME.so" |
   grep -q ' T nvgCreateInternal$'; then
   success "NanoVG implementation"
 else
@@ -563,7 +597,7 @@ info "Adding native library"
 
   zip -q \
     "$UNSIGNED_APK" \
-    "lib/$ABI/lib$APP_NAME.so"
+    "lib/$ANDROID_ABI/lib$APP_NAME.so"
 )
 
 success "Native library added"
@@ -666,7 +700,7 @@ printf "  %sAPK:%s         %s\n" \
   "$DIM" "$RESET" "$FINAL_APK"
 
 printf "  %sNative:%s      %s\n" \
-  "$DIM" "$RESET" "$WORK_DIR/lib/$ABI/lib$APP_NAME.so"
+  "$DIM" "$RESET" "$WORK_DIR/lib/$ANDROID_ABI/lib$APP_NAME.so"
 
 printf "  %sPackage:%s     %s\n" \
   "$DIM" "$RESET" "$PACKAGE_NAME"

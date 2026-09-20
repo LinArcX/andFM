@@ -6,6 +6,7 @@
 #include <GLES2/gl2.h>
 
 #include <chrono>
+#include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -56,7 +57,8 @@ struct App
   std::string searchQuery;
   int searchCaretPos = 0;
 
-  bool sidebarCollapsed = false;
+  bool sidebarCollapsed = true;
+  std::string statePath;
 
   int pressedKeyboardRow = -1;
   int pressedKeyboardCol = -1;
@@ -229,6 +231,44 @@ static bool isOnSidebarToggle(float x, float y)
          x <= btnX + kSidebarToggleSize &&
          y >= btnY &&
          y <= btnY + kSidebarToggleSize;
+}
+
+static void saveState()
+{
+  if (g_app.statePath.empty())
+    return;
+
+  FILE *pFile = fopen(g_app.statePath.c_str(), "w");
+
+  if (!pFile)
+    return;
+
+  fprintf(pFile, "sidebarCollapsed=%d\n", g_app.sidebarCollapsed ? 1 : 0);
+
+  fclose(pFile);
+}
+
+static void loadState()
+{
+  if (g_app.statePath.empty())
+    return;
+
+  FILE *pFile = fopen(g_app.statePath.c_str(), "r");
+
+  if (!pFile)
+    return;
+
+  char line[128];
+
+  while (fgets(line, sizeof(line), pFile) != nullptr)
+  {
+    int val = 0;
+
+    if (sscanf(line, "sidebarCollapsed=%d", &val) == 1)
+      g_app.sidebarCollapsed = (val != 0);
+  }
+
+  fclose(pFile);
 }
 
 static void drawFolderIcon(
@@ -2161,6 +2201,28 @@ static bool isInListArea(float x, float y)
          y <= listBottom;
 }
 
+static int getEntryIndexAt(float x, float y)
+{
+  if (!isInListArea(x, y))
+    return -1;
+
+  const float listTop = kTopInset + kToolbarHeight;
+  const float relY = y - listTop + g_app.scrollOffset;
+
+  if (relY < 0.0f)
+    return -1;
+
+  const int rowIdx = static_cast<int>(relY / kRowHeight);
+
+  if (rowIdx < 0 ||
+      rowIdx >= static_cast<int>(g_app.filteredIndices.size()))
+  {
+    return -1;
+  }
+
+  return g_app.filteredIndices[rowIdx];
+}
+
 static float getMaxScroll()
 {
   const float contentHeight =
@@ -2346,12 +2408,6 @@ static int32_t handleInput(
     g_app.touchInList = true;
     g_app.touchDragging = false;
 
-    uiSetButton(
-      g_app.ui,
-      0,
-      0,
-      true);
-
     return 1;
   }
 
@@ -2373,12 +2429,6 @@ static int32_t handleInput(
       {
         g_app.touchDragging = true;
         g_app.lastTouchY = y;
-
-        uiSetButton(
-          g_app.ui,
-          0,
-          0,
-          false);
       }
 
       return 1;
@@ -2459,6 +2509,7 @@ static int32_t handleInput(
     if (isOnSidebarToggle(x, y))
     {
       g_app.sidebarCollapsed = !g_app.sidebarCollapsed;
+      saveState();
       buildUi();
       return 1;
     }
@@ -2497,11 +2548,28 @@ static int32_t handleInput(
     if (!isInListArea(x, y))
       return 1;
 
-    uiSetButton(
-      g_app.ui,
-      0,
-      0,
-      false);
+    const int entryIdx = getEntryIndexAt(
+      g_app.touchStartX,
+      g_app.touchStartY);
+
+    if (entryIdx >= 0 &&
+        entryIdx < static_cast<int>(g_app.entries.size()))
+    {
+      const FileEntry &entry = g_app.entries[entryIdx];
+
+      if (entry.isDirectory)
+      {
+        std::string newPath = g_app.currentPath;
+
+        if (newPath.empty() || newPath.back() != '/')
+          newPath += '/';
+
+        newPath += entry.name;
+        newPath += '/';
+
+        g_app.pendingNavigate = newPath;
+      }
+    }
 
     return 1;
   }
@@ -2574,6 +2642,14 @@ void android_main(
 
   app->onAppCmd = handleCommand;
   app->onInputEvent = handleInput;
+
+  if (app->activity && app->activity->internalDataPath)
+  {
+    g_app.statePath =
+      std::string(app->activity->internalDataPath) + "/state.txt";
+
+    loadState();
+  }
 
   g_app.running = true;
 

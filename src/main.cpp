@@ -62,9 +62,8 @@ static const float kStatusBarHeight = 22.0f;
 static const float kRowHeight = 56.0f;
 static const float kSidebarItemHeight = 44.0f;
 
-static const float kBackButtonX = 12.0f;
-static const float kBackButtonW = 90.0f;
-static const float kBackButtonH = 34.0f;
+static const float kBackButtonSize = 30.0f;
+static const float kBackButtonMargin = 8.0f;
 
 static const float kScrollButtonSize = 36.0f;
 static const float kScrollButtonMargin = 8.0f;
@@ -703,7 +702,7 @@ static void buildUi()
   uiSetLayout(
     g_app.ui,
     column,
-    UI_HFILL | UI_VFILL | UI_TOP);
+    UI_HFILL | UI_TOP);
 
   uiSetMargins(
     g_app.ui,
@@ -985,16 +984,146 @@ static void draw()
       nullptr);
   }
 
-  nvgFontSize(g_app.vg, 14.0f);
-  nvgFontFace(g_app.vg, "default");
-  nvgFillColor(g_app.vg, rgb(210, 210, 210));
-  nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-  nvgText(
-    g_app.vg,
-    14.0f,
-    kTopInset + toolbarHeight * 0.5f,
-    g_app.currentPath.c_str(),
-    nullptr);
+  const bool canGoBack =
+    g_app.currentPath != "/" &&
+    !g_app.currentPath.empty();
+
+  const float toolbarCenterY = kTopInset + toolbarHeight * 0.5f;
+  const float backBtnX = kBackButtonMargin;
+  const float backBtnY = toolbarCenterY - kBackButtonSize * 0.5f;
+
+  {
+    nvgBeginPath(g_app.vg);
+    nvgRoundedRect(
+      g_app.vg,
+      backBtnX,
+      backBtnY,
+      kBackButtonSize,
+      kBackButtonSize,
+      6.0f);
+    nvgFillColor(
+      g_app.vg,
+      canGoBack ? rgb(60, 90, 130) : rgb(50, 50, 50));
+    nvgFill(g_app.vg);
+
+    const float arrowCx = backBtnX + kBackButtonSize * 0.5f;
+    const float arrowCy = backBtnY + kBackButtonSize * 0.5f;
+    const NVGcolor arrowFg =
+      canGoBack ? rgb(235, 235, 235) : rgb(120, 120, 120);
+
+    nvgBeginPath(g_app.vg);
+    nvgMoveTo(g_app.vg, arrowCx + 4.0f, arrowCy - 6.0f);
+    nvgLineTo(g_app.vg, arrowCx - 4.0f, arrowCy);
+    nvgLineTo(g_app.vg, arrowCx + 4.0f, arrowCy + 6.0f);
+    nvgStrokeColor(g_app.vg, arrowFg);
+    nvgStrokeWidth(g_app.vg, 2.0f);
+    nvgLineCap(g_app.vg, NVG_ROUND);
+    nvgLineJoin(g_app.vg, NVG_ROUND);
+    nvgStroke(g_app.vg);
+  }
+
+  {
+    float bx = backBtnX + kBackButtonSize + 10.0f;
+    const float maxX = screenWidth - 10.0f;
+    const float chipHeight = 24.0f;
+    const float chipY = toolbarCenterY - chipHeight * 0.5f;
+    const float chipPadH = 8.0f;
+
+    std::string breadcrumbPath = g_app.currentPath;
+
+    if (breadcrumbPath.empty())
+      breadcrumbPath = "/";
+
+    std::vector<std::string> segments;
+    segments.push_back("/");
+
+    std::string currentSegment;
+
+    for (size_t i = 0; i < breadcrumbPath.size(); i++)
+    {
+      const char c = breadcrumbPath[i];
+
+      if (c == '/')
+      {
+        if (!currentSegment.empty())
+        {
+          segments.push_back(currentSegment);
+          currentSegment.clear();
+        }
+      }
+      else
+      {
+        currentSegment += c;
+      }
+    }
+
+    if (!currentSegment.empty())
+      segments.push_back(currentSegment);
+
+    nvgFontSize(g_app.vg, 12.0f);
+    nvgFontFace(g_app.vg, "default");
+    nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+
+    for (size_t i = 0; i < segments.size(); i++)
+    {
+      const std::string &seg = segments[i];
+      const bool isLast = (i + 1 == segments.size());
+
+      float segBounds[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+
+      nvgTextBounds(
+        g_app.vg,
+        0.0f,
+        0.0f,
+        seg.c_str(),
+        nullptr,
+        segBounds);
+
+      const float textW = segBounds[2] - segBounds[0];
+      const float chipW = textW + chipPadH * 2.0f;
+
+      if (bx + chipW > maxX)
+        break;
+
+      nvgBeginPath(g_app.vg);
+      nvgRoundedRect(
+        g_app.vg,
+        bx,
+        chipY,
+        chipW,
+        chipHeight,
+        6.0f);
+      nvgFillColor(
+        g_app.vg,
+        isLast ? rgb(60, 90, 130) : rgb(48, 48, 48));
+      nvgFill(g_app.vg);
+
+      nvgFillColor(
+        g_app.vg,
+        isLast ? rgb(240, 240, 240) : rgb(180, 180, 180));
+      nvgText(
+        g_app.vg,
+        bx + chipPadH,
+        chipY + chipHeight * 0.5f,
+        seg.c_str(),
+        nullptr);
+
+      bx += chipW + 4.0f;
+
+      if (!isLast)
+      {
+        nvgFillColor(g_app.vg, rgb(120, 120, 120));
+        nvgText(
+          g_app.vg,
+          bx,
+          chipY + chipHeight * 0.5f,
+          ">",
+          nullptr);
+
+        bx += 10.0f;
+      }
+    }
+  }
 
   nvgSave(g_app.vg);
   nvgScissor(
@@ -1009,8 +1138,6 @@ static void draw()
   const float bottomNavY =
     screenHeight - statusHeight - kBottomNavHeight;
 
-  const float backButtonY =
-    bottomNavY + (kBottomNavHeight - kBackButtonH) * 0.5f - 8.0f;
   const float statusY = screenHeight - statusHeight;
 
   nvgBeginPath(g_app.vg);
@@ -1032,47 +1159,6 @@ static void draw()
     1.0f);
   nvgFillColor(g_app.vg, rgb(20, 20, 20));
   nvgFill(g_app.vg);
-
-  const bool canGoBack =
-    g_app.currentPath != "/" &&
-    !g_app.currentPath.empty();
-
-  nvgBeginPath(g_app.vg);
-  nvgRoundedRect(
-    g_app.vg,
-    kBackButtonX,
-    backButtonY,
-    kBackButtonW,
-    kBackButtonH,
-    6.0f);
-  nvgFillColor(
-    g_app.vg,
-    canGoBack ? rgb(60, 90, 130) : rgb(50, 50, 50));
-  nvgFill(g_app.vg);
-
-  const float backCx = kBackButtonX + kBackButtonW * 0.5f;
-  const float backCy = backButtonY + kBackButtonH * 0.5f;
-  const NVGcolor backFg =
-    canGoBack ? rgb(230, 230, 230) : rgb(120, 120, 120);
-
-  nvgBeginPath(g_app.vg);
-  nvgMoveTo(g_app.vg, backCx - 32.0f, backCy);
-  nvgLineTo(g_app.vg, backCx - 20.0f, backCy - 7.0f);
-  nvgMoveTo(g_app.vg, backCx - 32.0f, backCy);
-  nvgLineTo(g_app.vg, backCx - 20.0f, backCy + 7.0f);
-  nvgMoveTo(g_app.vg, backCx - 32.0f, backCy);
-  nvgLineTo(g_app.vg, backCx - 6.0f, backCy);
-  nvgStrokeColor(g_app.vg, backFg);
-  nvgStrokeWidth(g_app.vg, 2.0f);
-  nvgLineCap(g_app.vg, NVG_ROUND);
-  nvgLineJoin(g_app.vg, NVG_ROUND);
-  nvgStroke(g_app.vg);
-
-  nvgFontSize(g_app.vg, 14.0f);
-  nvgFontFace(g_app.vg, "default");
-  nvgFillColor(g_app.vg, backFg);
-  nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-  nvgText(g_app.vg, backCx, backCy, "Back", nullptr);
 
   nvgBeginPath(g_app.vg);
   nvgRect(
@@ -1226,16 +1312,13 @@ static void buttonHandler(
 
 static bool isOnBackButton(float x, float y)
 {
-  const float bottomNavY =
-    static_cast<float>(g_app.height) - kStatusBarHeight - kBottomNavHeight;
+  const float toolbarCenterY = kTopInset + kToolbarHeight * 0.5f;
+  const float buttonY = toolbarCenterY - kBackButtonSize * 0.5f;
 
-  const float buttonY =
-    bottomNavY + (kBottomNavHeight - kBackButtonH) * 0.5f - 8.0f;
-
-  return x >= kBackButtonX &&
-         x <= kBackButtonX + kBackButtonW &&
+  return x >= kBackButtonMargin &&
+         x <= kBackButtonMargin + kBackButtonSize &&
          y >= buttonY &&
-         y <= buttonY + kBackButtonH;
+         y <= buttonY + kBackButtonSize;
 }
 
 static bool isOnScrollUp(float x, float y)

@@ -1,7 +1,8 @@
 # ROADMAP
 
 - [ ] Implement file system browsing (list files/directories)
-- [ ] Add navigation (back, forward, up)
+- [x] Add navigation (back, forward, up)
+- [x] Add clickable breadcrumb navigation
 - [ ] Support file operations (copy, move, delete, rename)
 - [ ] Add multi-selection
 - [ ] Integrate with Android storage permissions

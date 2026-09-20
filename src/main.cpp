@@ -50,6 +50,18 @@ struct App
   std::vector<FileEntry> entries;
   std::string pendingNavigate;
   float scrollOffset = 0.0f;
+
+  struct BreadcrumbItem
+  {
+    std::string name;
+    std::string path;
+    float x = 0.0f;
+    float y = 0.0f;
+    float w = 0.0f;
+    float h = 0.0f;
+  };
+
+  std::vector<BreadcrumbItem> breadcrumbs;
 };
 
 static App g_app;
@@ -61,9 +73,6 @@ static const float kBottomNavHeight = 70.0f;
 static const float kStatusBarHeight = 22.0f;
 static const float kRowHeight = 56.0f;
 static const float kSidebarItemHeight = 44.0f;
-
-static const float kBackButtonSize = 30.0f;
-static const float kBackButtonMargin = 8.0f;
 
 static const float kScrollButtonSize = 36.0f;
 static const float kScrollButtonMargin = 8.0f;
@@ -984,50 +993,13 @@ static void draw()
       nullptr);
   }
 
-  const bool canGoBack =
-    g_app.currentPath != "/" &&
-    !g_app.currentPath.empty();
-
   const float toolbarCenterY = kTopInset + toolbarHeight * 0.5f;
-  const float backBtnX = kBackButtonMargin;
-  const float backBtnY = toolbarCenterY - kBackButtonSize * 0.5f;
-
   {
-    nvgBeginPath(g_app.vg);
-    nvgRoundedRect(
-      g_app.vg,
-      backBtnX,
-      backBtnY,
-      kBackButtonSize,
-      kBackButtonSize,
-      6.0f);
-    nvgFillColor(
-      g_app.vg,
-      canGoBack ? rgb(60, 90, 130) : rgb(50, 50, 50));
-    nvgFill(g_app.vg);
-
-    const float arrowCx = backBtnX + kBackButtonSize * 0.5f;
-    const float arrowCy = backBtnY + kBackButtonSize * 0.5f;
-    const NVGcolor arrowFg =
-      canGoBack ? rgb(235, 235, 235) : rgb(120, 120, 120);
-
-    nvgBeginPath(g_app.vg);
-    nvgMoveTo(g_app.vg, arrowCx + 4.0f, arrowCy - 6.0f);
-    nvgLineTo(g_app.vg, arrowCx - 4.0f, arrowCy);
-    nvgLineTo(g_app.vg, arrowCx + 4.0f, arrowCy + 6.0f);
-    nvgStrokeColor(g_app.vg, arrowFg);
-    nvgStrokeWidth(g_app.vg, 2.0f);
-    nvgLineCap(g_app.vg, NVG_ROUND);
-    nvgLineJoin(g_app.vg, NVG_ROUND);
-    nvgStroke(g_app.vg);
-  }
-
-  {
-    float bx = backBtnX + kBackButtonSize + 10.0f;
+    g_app.breadcrumbs.clear();
+    float bx = 10.0f;
     const float maxX = screenWidth - 10.0f;
-    const float chipHeight = 24.0f;
-    const float chipY = toolbarCenterY - chipHeight * 0.5f;
-    const float chipPadH = 8.0f;
+    const float itemHeight = 24.0f;
+    const float itemY = toolbarCenterY - itemHeight * 0.5f;
 
     std::string breadcrumbPath = g_app.currentPath;
 
@@ -1064,10 +1036,23 @@ static void draw()
     nvgFontFace(g_app.vg, "default");
     nvgTextAlign(g_app.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
 
+    std::string currentPathAccum = "";
+
     for (size_t i = 0; i < segments.size(); i++)
     {
       const std::string &seg = segments[i];
       const bool isLast = (i + 1 == segments.size());
+
+      if (i == 0)
+      {
+        currentPathAccum = "/";
+      }
+      else
+      {
+        if (!currentPathAccum.empty() && currentPathAccum.back() != '/')
+          currentPathAccum += '/';
+        currentPathAccum += seg;
+      }
 
       float segBounds[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 
@@ -1080,47 +1065,41 @@ static void draw()
         segBounds);
 
       const float textW = segBounds[2] - segBounds[0];
-      const float chipW = textW + chipPadH * 2.0f;
 
-      if (bx + chipW > maxX)
+      if (bx + textW > maxX)
         break;
 
-      nvgBeginPath(g_app.vg);
-      nvgRoundedRect(
-        g_app.vg,
-        bx,
-        chipY,
-        chipW,
-        chipHeight,
-        6.0f);
-      nvgFillColor(
-        g_app.vg,
-        isLast ? rgb(60, 90, 130) : rgb(48, 48, 48));
-      nvgFill(g_app.vg);
+      if (isLast)
+      {
+        nvgFillColor(g_app.vg, rgb(240, 240, 240));
+      }
+      else
+      {
+        nvgFillColor(g_app.vg, rgb(160, 160, 160));
+      }
 
-      nvgFillColor(
-        g_app.vg,
-        isLast ? rgb(240, 240, 240) : rgb(180, 180, 180));
       nvgText(
         g_app.vg,
-        bx + chipPadH,
-        chipY + chipHeight * 0.5f,
+        bx,
+        itemY + itemHeight * 0.5f,
         seg.c_str(),
         nullptr);
 
-      bx += chipW + 4.0f;
+      g_app.breadcrumbs.push_back({seg, currentPathAccum, bx, itemY, textW, itemHeight});
+
+      bx += textW + 4.0f;
 
       if (!isLast)
       {
-        nvgFillColor(g_app.vg, rgb(120, 120, 120));
+        nvgFillColor(g_app.vg, rgb(100, 100, 100));
         nvgText(
           g_app.vg,
           bx,
-          chipY + chipHeight * 0.5f,
-          ">",
+          itemY + itemHeight * 0.5f,
+          "/",
           nullptr);
 
-        bx += 10.0f;
+        bx += 8.0f;
       }
     }
   }
@@ -1310,17 +1289,6 @@ static void buttonHandler(
   g_app.pendingNavigate = newPath;
 }
 
-static bool isOnBackButton(float x, float y)
-{
-  const float toolbarCenterY = kTopInset + kToolbarHeight * 0.5f;
-  const float buttonY = toolbarCenterY - kBackButtonSize * 0.5f;
-
-  return x >= kBackButtonMargin &&
-         x <= kBackButtonMargin + kBackButtonSize &&
-         y >= buttonY &&
-         y <= buttonY + kBackButtonSize;
-}
-
 static bool isOnScrollUp(float x, float y)
 {
   const float bx =
@@ -1362,30 +1330,6 @@ static bool isInListArea(float x, float y)
   return x >= kSidebarWidth &&
          y >= listTop &&
          y <= listBottom;
-}
-
-static void handleBackClick()
-{
-  if (g_app.currentPath.empty() || g_app.currentPath == "/")
-    return;
-
-  std::string parent = g_app.currentPath;
-
-  if (parent.back() == '/')
-    parent.pop_back();
-
-  const size_t slash = parent.find_last_of('/');
-
-  if (slash == std::string::npos || slash == 0)
-  {
-    parent = "/";
-  }
-  else
-  {
-    parent = parent.substr(0, slash + 1);
-  }
-
-  g_app.pendingNavigate = parent;
 }
 
 static void handleScroll(int direction)
@@ -1480,10 +1424,14 @@ static int32_t handleInput(
       return 1;
     }
 
-    if (isOnBackButton(x, y))
+    for (const auto &crumb : g_app.breadcrumbs)
     {
-      handleBackClick();
-      return 1;
+      if (x >= crumb.x && x <= crumb.x + crumb.w &&
+          y >= crumb.y && y <= crumb.y + crumb.h)
+      {
+        g_app.pendingNavigate = crumb.path;
+        return 1;
+      }
     }
 
     if (isOnScrollUp(x, y))

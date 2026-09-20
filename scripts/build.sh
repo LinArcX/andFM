@@ -181,6 +181,7 @@ if [ "$MODE" = "debug" ]; then
 
   LINKER_FLAGS="
     -Wl,--gc-sections
+    -Wl,-z,max-page-size=16384
   "
 
   ANDROID_DEBUGGABLE="true"
@@ -200,6 +201,7 @@ else
   LINKER_FLAGS="
     -Wl,--gc-sections
     -Wl,--strip-debug
+    -Wl,-z,max-page-size=16384
   "
 
   ANDROID_DEBUGGABLE="false"

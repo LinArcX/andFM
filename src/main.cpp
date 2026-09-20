@@ -1,20 +1,19 @@
 #include <android/input.h>
+#include <android/log.h>
 #include <android/native_window.h>
 
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
 
 #include <chrono>
-#include <cstdio>
-#include <cstring>
 
 #include "android_native_app_glue.h"
 
-#include "nanovg.h"
-#include "nanovg_gl.h"
+#include "../third_party/nanovg/nanovg.h"
+#include "../third_party/nanovg/nanovg_gl.h"
 
-#include "oui-blendish/oui.h"
-#include "oui-blendish/blendish.h"
+#include "../third_party/oui-blendish/oui.h"
+#include "../third_party/oui-blendish/blendish.h"
 
 struct App
 {
@@ -31,7 +30,6 @@ struct App
   int height = 0;
 
   bool running = true;
-  bool checked = false;
   bool clicked = false;
 
   int buttonItem = -1;
@@ -161,8 +159,6 @@ static bool initEgl(ANativeWindow *window)
   if (!g_app.ui)
     return false;
 
-  uiMakeCurrent(g_app.ui);
-
   return true;
 }
 
@@ -211,6 +207,7 @@ static void shutdownEgl()
 }
 
 static void buttonHandler(
+  UIcontext *,
   int,
   UIevent event)
 {
@@ -221,74 +218,66 @@ static void buttonHandler(
 struct ButtonData
 {
   const char *label;
-  UIhandler handler;
 };
 
 static int createButton(
   const char *label)
 {
-  const int item = uiItem();
+  const int item = uiItem(g_app.ui);
 
   uiSetSize(
+    g_app.ui,
     item,
     0,
     BND_WIDGET_HEIGHT);
 
   uiSetEvents(
+    g_app.ui,
     item,
     UI_BUTTON0_HOT_UP);
 
   ButtonData *data =
     static_cast<ButtonData *>(
       uiAllocHandle(
+        g_app.ui,
         item,
         sizeof(ButtonData)));
 
   data->label = label;
-  data->handler = buttonHandler;
 
   return item;
 }
 
-static void uiHandler(
-  int item,
-  UIevent event)
-{
-  void *handle = uiGetHandle(item);
-
-  if (!handle)
-    return;
-
-  ButtonData *data =
-    static_cast<ButtonData *>(handle);
-
-  if (data->handler)
-    data->handler(item, event);
-}
-
 static void buildUi()
 {
-  uiBeginLayout();
+  uiBeginLayout(g_app.ui);
 
-  const int root = uiItem();
+  const int root = uiItem(g_app.ui);
 
   uiSetSize(
+    g_app.ui,
     root,
     g_app.width,
     g_app.height);
 
   const int column =
-    uiInsert(root, uiItem());
+    uiInsert(
+      g_app.ui,
+      root,
+      uiItem(g_app.ui));
 
   uiSetBox(
+    g_app.ui,
     column,
     UI_COLUMN);
 
   uiSetLayout(
+    g_app.ui,
     column,
     UI_HFILL | UI_VFILL);
 
   uiSetMargins(
+    g_app.ui,
     column,
     24,
     24,
@@ -296,45 +285,58 @@ static void buildUi()
     24);
 
   {
-    const int title = uiItem();
+    const int title = uiItem(g_app.ui);
 
     uiSetSize(
+      g_app.ui,
       title,
       0,
       BND_WIDGET_HEIGHT);
 
     uiSetLayout(
+      g_app.ui,
       title,
       UI_HFILL);
 
-    uiSetHandle(
-      title,
-      nullptr);
-
-    uiInsert(column, title);
+    uiInsert(
+      g_app.ui,
+      column,
+      title);
   }
 
   g_app.buttonItem =
     createButton("Click me");
 
-  uiInsert(
-    column,
-    g_app.buttonItem);
-
   uiSetLayout(
+    g_app.ui,
     g_app.buttonItem,
     UI_HFILL);
 
-  uiEndLayout();
+  uiInsert(
+    g_app.ui,
+    column,
+    g_app.buttonItem);
+
+  uiEndLayout(g_app.ui);
 }
 
 static void drawItem(
   int item)
 {
-  const UIrect rect = uiGetRect(item);
-  const UIitemState state = uiGetState(item);
+  const UIrect rect =
+    uiGetRect(
+      g_app.ui,
+      item);
 
-  void *handle = uiGetHandle(item);
+  const UIitemState state =
+    uiGetState(
+      g_app.ui,
+      item);
+
+  void *handle =
+    uiGetHandle(
+      g_app.ui,
+      item);
 
   if (item == g_app.buttonItem)
   {
@@ -354,8 +356,14 @@ static void drawItem(
 
     if (g_app.clicked)
     {
-      nvgFontSize(g_app.vg, 16.0f);
-      nvgFontFace(g_app.vg, "default");
+      nvgFontSize(
+        g_app.vg,
+        16.0f);
+
+      nvgFontFace(
+        g_app.vg,
+        "default");
+
       nvgFillColor(
         g_app.vg,
         nvgRGB(220, 220, 220));
@@ -369,17 +377,19 @@ static void drawItem(
     }
   }
 
-  const int child = uiFirstChild(item);
+  int child =
+    uiFirstChild(
+      g_app.ui,
+      item);
 
-  if (child >= 0)
+  while (child >= 0)
   {
-    int current = child;
+    drawItem(child);
 
-    while (current >= 0)
-    {
-      drawItem(current);
-      current = uiNextSibling(current);
-    }
+    child =
+      uiNextSibling(
+        g_app.ui,
+        child);
   }
 }
 
@@ -449,18 +459,24 @@ static int32_t handleInput(
     AMotionEvent_getAction(event);
 
   const int pointer =
-    action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK;
+    (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK) >>
+    AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
 
   const int actionType =
     action & AMOTION_EVENT_ACTION_MASK;
 
   const float x =
-    AMotionEvent_getX(event, pointer);
+    AMotionEvent_getX(
+      event,
+      pointer);
 
   const float y =
-    AMotionEvent_getY(event, pointer);
+    AMotionEvent_getY(
+      event,
+      pointer);
 
   uiSetCursor(
+    g_app.ui,
     static_cast<int>(x),
     static_cast<int>(y));
 
@@ -468,9 +484,10 @@ static int32_t handleInput(
       AMOTION_EVENT_ACTION_DOWN)
   {
     uiSetButton(
+      g_app.ui,
       0,
       0,
-      1);
+      true);
 
     return 1;
   }
@@ -479,20 +496,15 @@ static int32_t handleInput(
       AMOTION_EVENT_ACTION_UP)
   {
     uiSetButton(
+      g_app.ui,
       0,
       0,
-      0);
+      false);
 
     return 1;
   }
 
-  if (actionType ==
-      AMOTION_EVENT_ACTION_MOVE)
-  {
-    return 1;
-  }
-
-  return 0;
+  return 1;
 }
 
 static void handleCommand(
@@ -518,6 +530,8 @@ static void handleCommand(
           g_app.running = false;
           return;
         }
+
+        g_app.window = app->window;
 
         buildUi();
       }
@@ -570,7 +584,9 @@ void android_main(
              reinterpret_cast<void **>(&source)) >= 0)
     {
       if (source)
-        source->process(app, source);
+        source->process(
+          app,
+          source);
 
       if (app->destroyRequested)
       {
@@ -588,13 +604,17 @@ void android_main(
     if (g_app.display == EGL_NO_DISPLAY)
       continue;
 
-    uiSetHandler(uiHandler);
+    if (g_app.ui)
+    {
+      uiSetHandler(
+        g_app.ui,
+        buttonHandler);
 
-    buildUi();
-
-    uiProcess(
-      static_cast<int>(
-        getTimeMilliseconds()));
+      uiProcess(
+        g_app.ui,
+        static_cast<int>(
+          getTimeMilliseconds()));
+    }
 
     draw();
   }

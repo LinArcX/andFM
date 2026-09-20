@@ -105,29 +105,6 @@ CC="$TOOLCHAIN/x86_64-linux-android${ANDROID_API}-clang"
 [ -x "$CXX" ] || die "Android C++ compiler not found: $CXX"
 [ -x "$CC" ] || die "Android C compiler not found: $CC"
 
-#clone_if_missing()
-#{
-#  local url="$1"
-#  local directory="$2"
-#
-#  if [ ! -d "$directory/.git" ]; then
-#    echo "Downloading $directory..."
-#    git clone --depth 1 --recurse-submodules "$url" "$directory"
-#  fi
-#}
-#
-#clone_if_missing \
-#  "https://github.com/cnlohr/rawdrawandroid.git" \
-#  "$RAW_DIR"
-#
-#clone_if_missing \
-#  "https://github.com/geetrepo/oui-blendish.git" \
-#  "$OUI_DIR"
-#
-#clone_if_missing \
-#  "https://github.com/memononen/nanovg.git" \
-#  "$NVG_DIR"
-
 if [ ! -f "$ASSET_DIR/DejaVuSans.ttf" ]; then
   echo "Downloading DejaVu Sans..."
 
@@ -140,11 +117,14 @@ if [ ! -f "$ASSET_DIR/DejaVuSans.ttf" ]; then
 fi
 
 rm -rf "$BUILD_DIR/work"
-mkdir -p "$BUILD_DIR/work/lib/x86_64"
-mkdir -p "$BUILD_DIR/work/assets"
 
-cp "$ASSET_DIR/DejaVuSans.ttf" \
-   "$BUILD_DIR/work/assets/DejaVuSans.ttf"
+mkdir -p \
+  "$BUILD_DIR/work/lib/x86_64" \
+  "$BUILD_DIR/work/assets"
+
+cp \
+  "$ASSET_DIR/DejaVuSans.ttf" \
+  "$BUILD_DIR/work/assets/DejaVuSans.ttf"
 
 echo "Compiling rawdrawandroid glue..."
 
@@ -263,31 +243,18 @@ rm -f "$APK"
   -F "$UNSIGNED_APK" \
   --target-sdk-version "$ANDROID_API"
 
-cd "$BUILD_DIR/work"
-
-zip -D4r \
-  "../payload.apk" \
-  .
-
-cd "$ROOT"
-
-unzip -o "$BUILD_DIR/payload.apk" \
-  -d "$BUILD_DIR/work/apk"
-
-rm -f "$BUILD_DIR/payload.apk"
+echo "Adding native library..."
 
 (
-  cd "$BUILD_DIR/work/apk"
+  cd "$BUILD_DIR/work"
 
-  zip -D4r \
+  zip \
+    -q \
     "$UNSIGNED_APK" \
-    .
-
-  zip -D0 \
-    "$UNSIGNED_APK" \
-    resources.arsc \
-    AndroidManifest.xml
+    "lib/x86_64/libAndFM.so"
 )
+
+echo "Aligning APK..."
 
 "$ZIPALIGN" \
   -f \
@@ -311,6 +278,8 @@ if [ ! -f "$KEYSTORE" ]; then
     -validity 10000 \
     -dname "CN=Android Debug,O=Android,C=US"
 fi
+
+echo "Signing APK..."
 
 "$APKSIGNER" sign \
   --ks "$KEYSTORE" \

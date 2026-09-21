@@ -2498,7 +2498,17 @@ static int32_t handleInput(
   if (actionType ==
       AMOTION_EVENT_ACTION_UP)
   {
-    const bool wasDragging = g_app.touchDragging;
+    const float totalDx = x - g_app.touchStartX;
+    const float totalDy = y - g_app.touchStartY;
+
+    const float absDx = totalDx < 0.0f ? -totalDx : totalDx;
+    const float absDy = totalDy < 0.0f ? -totalDy : totalDy;
+
+    const bool movedTooFar =
+      (absDx > kDragSlop || absDy > kDragSlop);
+
+    const bool wasDragging =
+      g_app.touchDragging || movedTooFar;
 
     g_app.touchInList = false;
     g_app.touchDragging = false;

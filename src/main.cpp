@@ -819,7 +819,7 @@ static bool readDirectory(const std::string &path)
   {
     __android_log_print(
       ANDROID_LOG_ERROR,
-      "andFM",
+      "mewFMAnd",
       "Failed to open directory: %s",
       path.c_str());
 
@@ -1322,7 +1322,7 @@ static void drawExitDialog()
     g_app.vg,
     dialogX + kDialogWidth * 0.5f,
     dialogY + kDialogHeight * 0.30f,
-    "Exit andFM?",
+    "Exit mewFMAnd?",
     nullptr);
 
   nvgFontSize(g_app.vg, 34.0f);

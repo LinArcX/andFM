@@ -155,7 +155,7 @@ menu () {
       adb -s $device shell settings put system screen_off_timeout 86400000
 
       # need to extract to separate function
-      PROJECT_DIR="/mnt/D/workspace/c++/active/andFM"
+      PROJECT_DIR="/mnt/D/workspace/c++/active/mewFMAnd"
       DEBUG_DIR="$PROJECT_DIR/build/arm64_v8a/debug"
       RELEASE_DIR="$PROJECT_DIR/build/arm64_v8a/release"
  
@@ -188,7 +188,7 @@ menu () {
  
       echo "--> Installing:"
       echo "  $APK"
-      adb -s $device uninstall org.linarcx.andFM
+      adb -s $device uninstall org.linarcx.mewFMAnd
       adb -s $device install -r "$APK"
       ;;
     "Clean(arm64_v8a)")
@@ -249,10 +249,10 @@ menu () {
     "Install .apk to emulator")
       # unisntall old app first
       echo "--> Uninstalling old app first"
-      adb -s 127.0.0.1:5555 uninstall org.linarcx.andFM
+      adb -s 127.0.0.1:5555 uninstall org.linarcx.mewFMAnd
 
-      # adb -s 127.0.0.1:5555 install -r "/mnt/D/workspace/c++/active/andFM/build/andFM.apk"
-      PROJECT_DIR="/mnt/D/workspace/c++/active/andFM"
+      # adb -s 127.0.0.1:5555 install -r "/mnt/D/workspace/c++/active/mewFMAnd/build/mewFMAnd.apk"
+      PROJECT_DIR="/mnt/D/workspace/c++/active/mewFMAnd"
       DEBUG_DIR="$PROJECT_DIR/build/debug"
       RELEASE_DIR="$PROJECT_DIR/build/release"
       
@@ -287,22 +287,22 @@ menu () {
       adb -s 127.0.0.1:5555 install -r "$APK"
 
       echo "Granting storage permission..."
-      adb -s 127.0.0.1:5555 shell pm grant org.linarcx.andFM android.permission.READ_EXTERNAL_STORAGE 2>/dev/null
+      adb -s 127.0.0.1:5555 shell pm grant org.linarcx.mewFMAnd android.permission.READ_EXTERNAL_STORAGE 2>/dev/null
 
-      echo "--> Running andFM..."
-      adb -s 127.0.0.1:5555 shell am start -n org.linarcx.andFM/android.app.NativeActivity
+      echo "--> Running mewFMAnd..."
+      adb -s 127.0.0.1:5555 shell am start -n org.linarcx.mewFMAnd/android.app.NativeActivity
       ;;
     "Uninstall .apk from emulator")
-      adb -s 127.0.0.1:5555 uninstall org.linarcx.andFM
+      adb -s 127.0.0.1:5555 uninstall org.linarcx.mewFMAnd
       ;;
     "Adb run")
-      adb -s 127.0.0.1:5555 shell am start -n org.linarcx.andFM/android.app.NativeActivity
+      adb -s 127.0.0.1:5555 shell am start -n org.linarcx.mewFMAnd/android.app.NativeActivity
       ;;
     "Adb log")
-      adb -s 127.0.0.1:5555 logcat | grep andFM
+      adb -s 127.0.0.1:5555 logcat | grep mewFMAnd
       ;;
     "Adb close apk")
-      adb -s 127.0.0.1:5555 shell am force-stop org.linarcx.andFM
+      adb -s 127.0.0.1:5555 shell am force-stop org.linarcx.mewFMAnd
       ;;
     "Adb reboot android OS")
       adb -s 127.0.0.1:5555 shell reboot -p
@@ -367,7 +367,7 @@ menu () {
       # - [error id] may be * to suppress all warnings (for a specified file or files).
       # - [filename] may contain the wildcard characters * or ?.
       cppcheck --addon=cppcheck/misra.json --addon=cppcheck/findcasts.json --addon=cppcheck/misc.json --addon=cppcheck/y2038.json --addon=cppcheck/threadsafety.json --inline-suppr --std=c11 --enable=all --error-exitcode=1 --platform=unix64 --report-type=misra-c-2012 -q --xml --xml-version=2 lib/util/*.c lib/*.c example/*.c -I lib/util/ > report/cppcheck.xml 2>&1
-      cppcheck-htmlreport --file=report/cppcheck.xml --title="andFM" --report-dir=report --source-dir=.
+      cppcheck-htmlreport --file=report/cppcheck.xml --title="mewFMAnd" --report-dir=report --source-dir=.
       ;;
     "cppcheck(show)")
       ~/software/brave/brave-browser-1.86.142-linux-amd64/brave ./report/index.html
@@ -387,7 +387,7 @@ menu () {
       ;;
     "lcov")
       # https://wiki.cs.jmu.edu/student/gcov/start
-      ./build/debug/andFM
+      ./build/debug/mewFMAnd
       lcov --capture --directory build/debug --output-file build/debug/coverage.info
       ;;
     "gcovr")
@@ -402,7 +402,7 @@ menu () {
       ;;
     "kcov(generate)")
       rm -r coverage/*
-      kcov coverage/ build/debug/andFM
+      kcov coverage/ build/debug/mewFMAnd
       ;;
     "kcov(show)")
       ~/software/brave/brave-browser-1.86.142-linux-amd64/brave ./coverage/index.html
@@ -411,37 +411,37 @@ menu () {
     "llvm-cov")
       ;;
     "valgrind(memcheck)")
-      valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes --xtree-leak=yes -s -v build/debug/andFM
+      valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes --xtree-leak=yes -s -v build/debug/mewFMAnd
       ;;
     "callgrind")
-      valgrind --tool=callgrind --dump-instr=yes --collect-jumps=yes -s -v build/debug/andFM
+      valgrind --tool=callgrind --dump-instr=yes --collect-jumps=yes -s -v build/debug/mewFMAnd
       ;;
     "kcachegrind")
       ls callgrind.out.* cachegrind.out.* | fzf --header="kcachgrind: " | xargs kcachegrind
       ;;
     "cachegrind")
-      valgrind --tool=cachegrind --cache-sim=yes --branch-sim=yes -s -v build/debug/andFM
+      valgrind --tool=cachegrind --cache-sim=yes --branch-sim=yes -s -v build/debug/mewFMAnd
       ;;
     "helgrind")
-      valgrind --tool=helgrind -s -v build/debug/andFM
+      valgrind --tool=helgrind -s -v build/debug/mewFMAnd
       ;;
     "massif")
-      valgrind --tool=massif -s -v build/debug/andFM
+      valgrind --tool=massif -s -v build/debug/mewFMAnd
       ;;
     "ms_print")
       ls massif.out.* | fzf --header="ms_print: " | xargs ms_print
       ;;
     "drd")
-      valgrind --tool=drd --trace-fork-join=yes --trace-mutex=yes --trace-semaphore=yes -s -v build/debug/andFM
+      valgrind --tool=drd --trace-fork-join=yes --trace-mutex=yes --trace-semaphore=yes -s -v build/debug/mewFMAnd
       ;;
     "dhat")
-      valgrind --tool=dhat -s -v build/debug/andFM
+      valgrind --tool=dhat -s -v build/debug/mewFMAnd
       ;;
     "dhat(cat)")
       ls dhat.out.* | fzf --header="dhat: " | xargs cat | less
       ;;
     "bbv")
-      valgrind --tool=exp-bbv -s -v build/debug/andFM
+      valgrind --tool=exp-bbv -s -v build/debug/mewFMAnd
       ;;
     "bbv(cat)")
       ls bb.out.* | fzf --header="bbv: " | xargs cat | less
@@ -450,7 +450,7 @@ menu () {
       ls build/debug | fzf --header="perf: " | xargs perf stat -d
       ;;
     "uftrace record(test)")
-      uftrace --srcline -a --symbols --time --no-libcall --symbols -F __clove_symint___UtilSuite* record build/debug/andFM
+      uftrace --srcline -a --symbols --time --no-libcall --symbols -F __clove_symint___UtilSuite* record build/debug/mewFMAnd
       ;;
     "uftrace replay(tests)")
       uftrace replay

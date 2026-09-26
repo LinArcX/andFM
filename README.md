@@ -1,4 +1,4 @@
-# andFM
+# mewFMAnd
 
 A minimal Android native application template using C++17, [rawdrawandroid](https://github.com/cntools/rawdraw), [NanoVG](https://github.com/memononen/nanovg), and [OUI/Blendish](https://github.com/ouiliame/oui-blendish). It demonstrates a simple UI with a button and text, built as a native activity.
 
@@ -50,15 +50,15 @@ Set `ANDROID_HOME` to your SDK path. Default is `$HOME/android-sdk`.
 ./scripts/build.sh --clean --release --arm64_v8a
 ```
 
-The APK will be at `build/<abi>/<mode>/andFM.apk`, for example `build/x86_64/debug/andFM.apk` or `build/arm64_v8a/release/andFM.apk`.
+The APK will be at `build/<abi>/<mode>/mewFMAnd.apk`, for example `build/x86_64/debug/mewFMAnd.apk` or `build/arm64_v8a/release/mewFMAnd.apk`.
 
 ## Running
 
 Install on an Android device or emulator:
 
 ```bash
-adb install -r build/arm64_v8a/debug/andFM.apk
-adb shell am start -n org.linarcx.andFM/android.app.NativeActivity
+adb install -r build/arm64_v8a/debug/mewFMAnd.apk
+adb shell am start -n org.linarcx.mewFMAnd/android.app.NativeActivity
 ```
 
 ## Project Structure

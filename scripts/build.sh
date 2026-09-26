@@ -2,8 +2,8 @@
 
 set -eu
 
-APP_NAME="andFM"
-PACKAGE_NAME="org.linarcx.andFM"
+APP_NAME="mewFMAnd"
+PACKAGE_NAME="org.linarcx.mewFMAnd"
 
 API_LEVEL="30"
 
@@ -107,7 +107,7 @@ title()
   printf "\n"
   printf "%s%s╭──────────────────────────────────────╮%s\n" \
     "$BOLD" "$MAGENTA" "$RESET"
-  printf "%s%s│             andFM Build              │%s\n" \
+  printf "%s%s│             mewFMAnd Build              │%s\n" \
     "$BOLD" "$MAGENTA" "$RESET"
   printf "%s%s╰──────────────────────────────────────╯%s\n" \
     "$BOLD" "$MAGENTA" "$RESET"
@@ -422,7 +422,7 @@ info "rawdrawandroid"
   $PREPROCESSOR_FLAGS \
   $THIRD_PARTY_WARNINGS \
   $INCLUDES \
-  -DAPPNAME='"andFM"' \
+  -DAPPNAME='"mewFMAnd"' \
   -c \
   "$RAWDRAW_DIR/android_native_app_glue.c" \
   -o "$WORK_DIR/android_native_app_glue.o"
@@ -624,8 +624,8 @@ if [ ! -f "$KEYSTORE" ]; then
     KEY_NAME="Android Debug"
     ORGANIZATION="Android"
   else
-    KEY_NAME="andFM Release"
-    ORGANIZATION="andFM"
+    KEY_NAME="mewFMAnd Release"
+    ORGANIZATION="mewFMAnd"
   fi
 
   "$KEYTOOL" \
@@ -719,6 +719,6 @@ printf "  adb -s 127.0.0.1:5555 shell am start -n %s/android.app.NativeActivity\
 printf "\n"
 
 printf "%sLog:%s\n" "$BOLD" "$RESET"
-printf "  adb -s 127.0.0.1:5555 logcat | grep -E 'andFM|AndroidRuntime|DEBUG|FATAL'\n"
+printf "  adb -s 127.0.0.1:5555 logcat | grep -E 'mewFMAnd|AndroidRuntime|DEBUG|FATAL'\n"
 
 printf "\n"
